@@ -1,0 +1,308 @@
+---
+title: Jobs API
+description: Post job listings, update job details, and manage job applications for companies
+---
+
+The Jobs API enables companies to post job opportunities and manage applications on Khedma Market.
+
+## Create job
+
+Create a new job posting.
+
+```typescript
+const job = await trpc.job.create.mutate({
+  title: "Senior Full Stack Developer",
+  description: {
+    blocks: [
+      {
+        type: "paragraph",
+        data: { text: "We are looking for an experienced developer..." }
+      }
+    ]
+  },
+  location: "Casablanca, Morocco",
+  jobType: "full_time",
+  canBeRemote: true,
+  salary: "15000-25000 MAD"
+});
+```
+
+### Input parameters
+
+<ParamField path="title" type="string" required>
+  Job title (5-250 characters)
+</ParamField>
+
+<ParamField path="description" type="OutputData" required>
+  Job description in Editor.js format
+</ParamField>
+
+<ParamField path="location" type="string" required>
+  Job location (5-250 characters)
+</ParamField>
+
+<ParamField path="jobType" type="enum" required>
+  Type of employment:
+  - `full_time`: Full-time position
+  - `part_time`: Part-time position
+  - `contract`: Contract-based
+  - `intern`: Internship
+</ParamField>
+
+<ParamField path="canBeRemote" type="boolean">
+  Whether the job can be done remotely
+  
+  Default: `false`
+</ParamField>
+
+<ParamField path="salary" type="string">
+  Salary range or amount (optional)
+</ParamField>
+
+### Response
+
+Returns the created job object with all fields plus:
+
+<ResponseField name="id" type="string">
+  Unique job identifier
+</ResponseField>
+
+<ResponseField name="slug" type="string">
+  URL-friendly slug for the job
+</ResponseField>
+
+<ResponseField name="companyId" type="string">
+  ID of the company posting the job
+</ResponseField>
+
+<ResponseField name="createdAt" type="Date">
+  Job creation timestamp
+</ResponseField>
+
+<ResponseField name="updatedAt" type="Date">
+  Last update timestamp
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **BAD_REQUEST**: You need to setup a company profile first
+  - **BAD_REQUEST**: An error occurred while creating the job
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+<Note>
+Only users with a company profile can create job postings.
+</Note>
+
+---
+
+## Update job
+
+Update an existing job posting.
+
+```typescript
+const job = await trpc.job.update.mutate({
+  id: "job_id",
+  title: "Senior Full Stack Developer (Updated)",
+  description: {
+    blocks: [
+      {
+        type: "paragraph",
+        data: { text: "Updated job description..." }
+      }
+    ]
+  },
+  location: "Rabat, Morocco",
+  jobType: "full_time",
+  canBeRemote: true,
+  salary: "18000-28000 MAD"
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Job ID to update
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Updated job title (5-250 characters)
+</ParamField>
+
+<ParamField path="description" type="OutputData" required>
+  Updated job description in Editor.js format
+</ParamField>
+
+<ParamField path="location" type="string" required>
+  Updated job location (5-250 characters)
+</ParamField>
+
+<ParamField path="jobType" type="enum" required>
+  Type of employment: `full_time`, `part_time`, `contract`, or `intern`
+</ParamField>
+
+<ParamField path="canBeRemote" type="boolean">
+  Whether the job can be done remotely
+</ParamField>
+
+<ParamField path="salary" type="string">
+  Updated salary information (optional)
+</ParamField>
+
+### Response
+
+Returns the updated job object with all fields.
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **BAD_REQUEST**: You need to setup a company profile first
+  - **BAD_REQUEST**: An error occurred while updating the job
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Apply to job
+
+Submit a job application with a cover letter.
+
+```typescript
+const application = await trpc.job.apply.mutate({
+  slug: "senior-full-stack-developer-abc1",
+  coverLetter: "Dear Hiring Manager, I am very interested in this position..."
+});
+```
+
+### Input parameters
+
+<ParamField path="slug" type="string" required>
+  Job slug (from the job URL)
+</ParamField>
+
+<ParamField path="coverLetter" type="string" required>
+  Cover letter text explaining why you're a good fit
+</ParamField>
+
+### Response
+
+Returns the created application object:
+
+<ResponseField name="id" type="string">
+  Unique application identifier
+</ResponseField>
+
+<ResponseField name="jobId" type="string">
+  ID of the job applied to
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  ID of the applicant
+</ResponseField>
+
+<ResponseField name="coverLetter" type="string">
+  The submitted cover letter
+</ResponseField>
+
+<ResponseField name="createdAt" type="Date">
+  Application submission timestamp
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **BAD_REQUEST**: Job not found
+  - **BAD_REQUEST**: An error occurred while applying for the job
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Code examples
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    // Create a job posting
+    async function createJobPosting() {
+      try {
+        const job = await trpc.job.create.mutate({
+          title: "Frontend Developer",
+          description: {
+            blocks: [
+              { type: "paragraph", data: { text: "Join our team..." } }
+            ]
+          },
+          location: "Marrakech, Morocco",
+          jobType: "full_time",
+          canBeRemote: false,
+          salary: "12000-18000 MAD"
+        });
+        
+        console.log('Job created:', job.slug);
+        return job;
+      } catch (error) {
+        console.error('Failed to create job:', error);
+      }
+    }
+
+    // Apply to a job
+    async function applyToJob(slug: string) {
+      try {
+        const application = await trpc.job.apply.mutate({
+          slug,
+          coverLetter: "I am excited about this opportunity..."
+        });
+        
+        console.log('Application submitted:', application.id);
+        return application;
+      } catch (error) {
+        console.error('Failed to apply:', error);
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="React Hook">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    function JobApplicationForm({ jobSlug }: { jobSlug: string }) {
+      const applyMutation = trpc.job.apply.useMutation({
+        onSuccess: (data) => {
+          console.log('Application submitted:', data.id);
+        },
+        onError: (error) => {
+          console.error('Application failed:', error.message);
+        }
+      });
+
+      const handleSubmit = (coverLetter: string) => {
+        applyMutation.mutate({
+          slug: jobSlug,
+          coverLetter
+        });
+      };
+
+      return (
+        <div>
+          {applyMutation.isLoading && <p>Submitting...</p>}
+          {applyMutation.isSuccess && <p>Application submitted!</p>}
+          {/* Form UI */}
+        </div>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>

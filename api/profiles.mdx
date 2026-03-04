@@ -1,0 +1,482 @@
+---
+title: Profiles API
+description: Manage freelancer profiles including skills, languages, descriptions, and professional information
+---
+
+The Profiles API enables freelancers to build and manage their professional profiles on Khedma Market.
+
+## Skills management
+
+### Get all skills
+
+Retrieve all available skills in the system.
+
+```typescript
+const skills = await trpc.profile.getSkills.query();
+```
+
+### Response
+
+Returns an array of skill objects sorted alphabetically by name.
+
+### Authentication
+
+Requires authentication: **No** (publicProcedure)
+
+---
+
+### Get user skills
+
+Retrieve skills for the authenticated user.
+
+```typescript
+const userSkills = await trpc.profile.getUserSkills.query();
+```
+
+### Response
+
+<ResponseField name="id" type="string">
+  Skill ID
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Skill name
+</ResponseField>
+
+<ResponseField name="value" type="string">
+  URL-friendly skill identifier
+</ResponseField>
+
+<ResponseField name="level" type="string">
+  Proficiency level: `beginner`, `intermediate`, `advanced`, or `expert`
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+### Add skill
+
+Add a new skill to the user's profile.
+
+```typescript
+const result = await trpc.profile.addSkill.mutate({
+  name: "React",
+  level: "advanced"
+});
+```
+
+### Input parameters
+
+<ParamField path="name" type="string" required>
+  Skill name
+</ParamField>
+
+<ParamField path="level" type="enum" required>
+  Proficiency level:
+  - `beginner`: Just starting out
+  - `intermediate`: Comfortable with fundamentals
+  - `advanced`: Highly proficient
+  - `expert`: Master level
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the operation was successful
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  The created skill object
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+### Update skill
+
+Update an existing skill's name or proficiency level.
+
+```typescript
+const result = await trpc.profile.updateSkill.mutate({
+  id: "skill_id",
+  name: "React.js",
+  level: "expert"
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Skill ID to update
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Updated skill name
+</ParamField>
+
+<ParamField path="level" type="enum" required>
+  Updated proficiency level
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the operation was successful
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  The updated skill object
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+### Remove skill
+
+Remove a skill from the user's profile.
+
+```typescript
+const result = await trpc.profile.removeSkill.mutate({
+  id: "skill_id"
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Skill ID to remove
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the operation was successful
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Languages management
+
+### Get all languages
+
+Retrieve all available languages in the system.
+
+```typescript
+const languages = await trpc.profile.getLanguages.query();
+```
+
+### Response
+
+Returns an array of language objects sorted alphabetically.
+
+### Authentication
+
+Requires authentication: **No** (publicProcedure)
+
+---
+
+### Get user languages
+
+Retrieve languages for the authenticated user.
+
+```typescript
+const userLanguages = await trpc.profile.getUserLanguages.query();
+```
+
+### Response
+
+<ResponseField name="id" type="string">
+  Language ID
+</ResponseField>
+
+<ResponseField name="label" type="string">
+  Language name in English
+</ResponseField>
+
+<ResponseField name="value" type="string">
+  Language code
+</ResponseField>
+
+<ResponseField name="nativeName" type="string">
+  Language name in its native script
+</ResponseField>
+
+<ResponseField name="level" type="string">
+  Proficiency level
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+### Add language
+
+Add a language to the user's profile.
+
+```typescript
+const result = await trpc.profile.addLanguage.mutate({
+  id: "language_id",
+  level: "fluent"
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Language ID from the available languages list
+</ParamField>
+
+<ParamField path="level" type="enum" required>
+  Proficiency level:
+  - `basic`: Basic understanding
+  - `conversational`: Can hold conversations
+  - `fluent`: Highly proficient
+  - `native_or_bilingual`: Native speaker or bilingual
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the operation was successful
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  The created language association
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+### Update language
+
+Update the proficiency level for a language.
+
+```typescript
+const result = await trpc.profile.updateLanguage.mutate({
+  id: "language_id",
+  level: "native_or_bilingual"
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Language ID to update
+</ParamField>
+
+<ParamField path="level" type="enum" required>
+  Updated proficiency level
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the operation was successful
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  The updated language association
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+### Remove language
+
+Remove a language from the user's profile.
+
+```typescript
+const result = await trpc.profile.removeLanguage.mutate({
+  id: "language_id"
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Language ID to remove
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the operation was successful
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Profile description
+
+### Get user description
+
+Retrieve the authenticated user's profile description.
+
+```typescript
+const description = await trpc.profile.getUserDescription.query();
+```
+
+### Response
+
+<ResponseField name="description" type="string">
+  User's profile description
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+### Update user description
+
+Update the user's profile description.
+
+```typescript
+const result = await trpc.profile.updateUserDescription.mutate({
+  description: "Experienced full-stack developer specializing in React and Node.js..."
+});
+```
+
+### Input parameters
+
+<ParamField path="description" type="string">
+  Updated profile description (optional)
+</ParamField>
+
+### Response
+
+Returns the updated user object.
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Code examples
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    // Build a complete profile
+    async function buildProfile() {
+      try {
+        // Add skills
+        await trpc.profile.addSkill.mutate({
+          name: "React",
+          level: "expert"
+        });
+        
+        await trpc.profile.addSkill.mutate({
+          name: "TypeScript",
+          level: "advanced"
+        });
+
+        // Add languages
+        const languages = await trpc.profile.getLanguages.query();
+        const english = languages.find(l => l.value === 'en');
+        
+        if (english) {
+          await trpc.profile.addLanguage.mutate({
+            id: english.id,
+            level: "native_or_bilingual"
+          });
+        }
+
+        // Update description
+        await trpc.profile.updateUserDescription.mutate({
+          description: "Passionate developer with 5+ years of experience..."
+        });
+
+        console.log('Profile updated successfully');
+      } catch (error) {
+        console.error('Failed to update profile:', error);
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="React Component">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    function SkillsManager() {
+      const { data: skills } = trpc.profile.getUserSkills.useQuery();
+      const addSkillMutation = trpc.profile.addSkill.useMutation();
+      const removeSkillMutation = trpc.profile.removeSkill.useMutation();
+
+      const handleAddSkill = async (name: string, level: string) => {
+        await addSkillMutation.mutateAsync({ name, level });
+      };
+
+      const handleRemoveSkill = async (id: string) => {
+        await removeSkillMutation.mutateAsync({ id });
+      };
+
+      return (
+        <div>
+          <h2>Your Skills</h2>
+          {skills?.map(skill => (
+            <div key={skill.id}>
+              {skill.name} - {skill.level}
+              <button onClick={() => handleRemoveSkill(skill.id)}>
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Best practices
+
+<Accordion title="Skills management">
+  - Be specific with skill names (e.g., "React.js" instead of just "React")
+  - Honestly assess your proficiency level
+  - Focus on relevant skills for your target jobs
+  - Keep your skills list updated as you learn
+</Accordion>
+
+<Accordion title="Languages">
+  - Only add languages you can actually use professionally
+  - Be honest about proficiency levels
+  - Native language should be marked as "native_or_bilingual"
+</Accordion>
+
+<Accordion title="Profile description">
+  - Write in first person for a personal touch
+  - Highlight your unique strengths and experience
+  - Keep it concise but informative
+  - Include your specializations and what makes you stand out
+</Accordion>

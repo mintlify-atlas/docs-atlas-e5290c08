@@ -1,0 +1,337 @@
+---
+title: Messaging system
+description: Communicate with clients and freelancers through Khedma Market's built-in messaging platform
+---
+
+The messaging system enables direct communication between users on Khedma Market. Stay in touch with clients, discuss project details, and share files - all within the platform.
+
+## How messaging works
+
+Messaging on Khedma Market is built around conversations:
+
+<CardGroup cols={2}>
+  <Card title="One-on-one conversations" icon="comments">
+    Private conversations between two users
+  </Card>
+  <Card title="Persistent history" icon="clock-rotate-left">
+    Access your full message history anytime
+  </Card>
+  <Card title="File attachments" icon="paperclip">
+    Share documents, images, and files
+  </Card>
+  <Card title="Real-time updates" icon="bolt">
+    Messages appear instantly for both parties
+  </Card>
+</CardGroup>
+
+## Conversation structure
+
+Each conversation involves two users:
+
+```typescript
+model Conversation {
+  id         String    @id @default(cuid())
+  senderId   String    // User who initiated
+  receiverId String    // Other participant
+  sender     User      @relation("SenderToConversation", fields: [senderId], references: [id])
+  receiver   User      @relation("ReceiverToConversation", fields: [receiverId], references: [id])
+  messages   Message[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+```
+
+## Starting a conversation
+
+Initiate conversations from multiple places:
+
+**From a gig page**
+1. View a freelancer's gig
+2. Click "Contact Seller"
+3. System creates or opens existing conversation
+4. Send your first message
+
+**From a profile**
+1. Visit a user's profile
+2. Click "Message" button
+3. Start chatting immediately
+
+**Creating conversations programmatically**
+
+```typescript
+const getOrCreateConversation = async (user1Id: string, user2Id: string) => {
+  // Check if conversation exists
+  let conversation = await db.conversation.findFirst({
+    where: {
+      OR: [
+        { senderId: user1Id, receiverId: user2Id },
+        { senderId: user2Id, receiverId: user1Id }
+      ]
+    }
+  });
+  
+  // Create new conversation if none exists
+  if (!conversation) {
+    conversation = await db.conversation.create({
+      data: {
+        senderId: user1Id,
+        receiverId: user2Id
+      }
+    });
+  }
+  
+  return conversation;
+};
+```
+
+<Info>
+  Only one conversation exists between any two users - previous messages remain accessible even if you haven't chatted in a while.
+</Info>
+
+## Sending messages
+
+Messages are the core of each conversation:
+
+```typescript
+model Message {
+  id             String        @id @default(cuid())
+  content        String        @db.Text
+  conversationId String
+  userId         String        // Message sender
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User          @relation(fields: [userId], references: [id])
+  conversation   Conversation  @relation(fields: [conversationId], references: [id])
+  attachements   Attachement[]
+}
+```
+
+### Sending text messages
+
+1. Navigate to your inbox
+2. Select a conversation
+3. Type your message in the input field
+4. Press Enter or click Send
+
+```typescript
+const sendMessage = async (conversationId: string, content: string, userId: string) => {
+  return await db.message.create({
+    data: {
+      content,
+      conversationId,
+      userId
+    },
+    include: {
+      user: true
+    }
+  });
+};
+```
+
+### Adding attachments
+
+Share files within your messages:
+
+```typescript
+model Attachement {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  type      String   // "document", "image", etc.
+  messageId String?
+  message   Message? @relation(fields: [messageId], references: [id])
+  createdAt DateTime @default(now())
+}
+```
+
+**To attach files:**
+
+1. Click the attachment icon in the message composer
+2. Select files from your computer
+3. Files upload automatically
+4. Send the message with attachments
+
+**Supported file types:**
+- Documents (PDF, DOC, DOCX, TXT)
+- Images (JPG, PNG, GIF)
+- Archives (ZIP, RAR)
+- Other common formats
+
+<Note>
+  File attachments are stored securely and remain accessible throughout the conversation history.
+</Note>
+
+## Managing conversations
+
+### Viewing your inbox
+
+Access all your conversations from the inbox:
+
+1. Click the messages icon in the navigation
+2. See a list of all conversations
+3. Conversations show:
+   - Other user's name and profile picture
+   - Most recent message preview
+   - Timestamp of last message
+   - Unread indicator (if applicable)
+
+```typescript
+const getUserConversations = async (userId: string) => {
+  return await db.conversation.findMany({
+    where: {
+      OR: [
+        { senderId: userId },
+        { receiverId: userId }
+      ]
+    },
+    include: {
+      messages: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          content: true,
+          createdAt: true,
+          attachements: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              image: true
+            }
+          }
+        }
+      },
+      sender: true,
+      receiver: true
+    }
+  });
+};
+```
+
+### Conversation view
+
+Inside a conversation, you'll see:
+
+**Message thread**
+- All messages in chronological order
+- Your messages aligned to the right
+- Other user's messages aligned to the left
+- Timestamps for each message
+- Attached files displayed inline
+
+**User information**
+- Other user's profile picture
+- Username and full name
+- Link to their full profile
+- Online status (if available)
+
+### Searching conversations
+
+Find specific messages or conversations:
+- Search by user name
+- Search within message content
+- Filter by date range
+- View conversations with attachments
+
+## Notifications
+
+Stay informed about new messages:
+
+**Notification types**
+- In-app notifications when you receive a message
+- Email notifications (if enabled)
+- Browser push notifications (if permitted)
+
+**Notification settings**
+
+```typescript
+// User notification preferences
+user.inboxNotifications: boolean  // Toggle message notifications
+```
+
+Control your notification preferences:
+1. Go to account settings
+2. Navigate to notification preferences
+3. Toggle inbox notifications on/off
+4. Save changes
+
+<Info>
+  You can disable inbox notifications if you prefer to check messages manually.
+</Info>
+
+## Message best practices
+
+### For clients
+
+<CardGroup cols={2}>
+  <Card title="Be clear about requirements" icon="list-check">
+    Provide detailed project requirements upfront
+  </Card>
+  <Card title="Share necessary files" icon="file-arrow-up">
+    Attach briefs, assets, and reference materials
+  </Card>
+  <Card title="Respond promptly" icon="clock">
+    Quick responses help projects move forward
+  </Card>
+  <Card title="Be professional" icon="user-tie">
+    Maintain professional communication at all times
+  </Card>
+</CardGroup>
+
+### For freelancers
+
+<CardGroup cols={2}>
+  <Card title="Clarify scope" icon="magnifying-glass">
+    Ask questions to fully understand requirements
+  </Card>
+  <Card title="Set expectations" icon="calendar">
+    Communicate timelines and deliverables clearly
+  </Card>
+  <Card title="Update clients" icon="bullhorn">
+    Keep clients informed of progress
+  </Card>
+  <Card title="Request feedback" icon="comment-dots">
+    Ask for feedback during and after projects
+  </Card>
+</CardGroup>
+
+## Communication guidelines
+
+Follow these guidelines for effective communication:
+
+1. **Keep it professional**: All messages should be work-related and respectful
+2. **Don't share sensitive info**: Avoid sharing passwords or financial details in messages
+3. **Use attachments**: Share files rather than describing them
+4. **Confirm understanding**: Recap important decisions or requirements
+5. **Document agreements**: Keep important details in writing
+
+<Note>
+  Message history serves as a record of your communication. Reference previous messages to maintain context.
+</Note>
+
+## Privacy and security
+
+Your conversations are private:
+
+- Only conversation participants can view messages
+- Messages are not visible to other platform users
+- Platform administrators have access for support purposes only
+- Report inappropriate messages to platform support
+
+## Connecting messaging with orders
+
+When you place an order:
+- A conversation is automatically created (or existing one is used)
+- Discuss order details and requirements
+- Share deliverables through messages
+- Request revisions via the conversation
+
+```typescript
+// Messages support the full order lifecycle
+Order -> Conversation -> Messages -> Deliverables
+```
+
+<Info>
+  Keep all project communication in the platform messaging system for a complete record and easier dispute resolution if needed.
+</Info>

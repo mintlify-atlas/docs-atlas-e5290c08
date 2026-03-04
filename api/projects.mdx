@@ -1,0 +1,404 @@
+---
+title: Projects API
+description: Showcase portfolio projects with descriptions, media galleries, and status management
+---
+
+The Projects API allows freelancers to showcase their portfolio work on Khedma Market.
+
+## Create draft project
+
+Create a new draft project to begin adding portfolio work.
+
+```typescript
+const project = await trpc.project.createDraft.mutate();
+```
+
+### Response
+
+<ResponseField name="id" type="string">
+  Unique project identifier
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  Empty string (to be filled in later)
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Empty string (to be filled in later)
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  ID of the user who created the project
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Project status (will be "draft")
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Create or update project
+
+Update a project with complete information including title, description, and media gallery.
+
+```typescript
+const project = await trpc.project.createProject.mutate({
+  id: "project_id",
+  title: "E-commerce Website for Fashion Brand",
+  description: "Built a full-featured e-commerce platform with React and Node.js...",
+  status: "published",
+  gallery: {
+    images: [
+      "https://example.com/screenshot1.jpg",
+      "https://example.com/screenshot2.jpg",
+      "https://example.com/screenshot3.jpg"
+    ],
+    videos: [
+      "https://example.com/demo.mp4"
+    ],
+    documents: [
+      "https://example.com/case-study.pdf"
+    ]
+  }
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Project ID to update
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Project title (5-250 characters)
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Detailed project description (5-2000 characters)
+</ParamField>
+
+<ParamField path="status" type="enum">
+  Project status:
+  - `draft`: Not visible to others
+  - `published`: Visible on your profile
+  
+  Default: `draft`
+</ParamField>
+
+<ParamField path="gallery" type="object" required>
+  Media gallery containing:
+  - `images`: array of image URLs (at least one required)
+  - `videos`: array of video URLs (optional)
+  - `documents`: array of document URLs (optional)
+</ParamField>
+
+### Response
+
+Returns the updated project object with all fields plus:
+
+<ResponseField name="createdAt" type="Date">
+  Project creation timestamp
+</ResponseField>
+
+<ResponseField name="updatedAt" type="Date">
+  Last update timestamp
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **NOT_FOUND**: Project not found or you don't own it
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+<Note>
+All existing attachments are removed and replaced when updating the gallery.
+</Note>
+
+---
+
+## Delete project
+
+Permanently delete a project from your portfolio.
+
+```typescript
+const result = await trpc.project.delete.mutate({
+  id: "project_id"
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Project ID to delete
+</ParamField>
+
+### Response
+
+Returns the deleted project object.
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **NOT_FOUND**: Project not found or you don't own it
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+<Warning>
+Deleting a project is permanent and cannot be undone. All associated media attachments will also be removed.
+</Warning>
+
+---
+
+## Project gallery structure
+
+Projects support three types of media:
+
+### Images
+
+<ParamField path="images" type="array" required>
+  Array of image URLs. At least one image is required.
+  
+  Best practices:
+  - Use high-quality screenshots or photos
+  - Show different aspects of the project
+  - Include before/after comparisons if relevant
+</ParamField>
+
+### Videos
+
+<ParamField path="videos" type="array">
+  Array of video URLs (optional)
+  
+  Best practices:
+  - Keep videos short (under 2 minutes)
+  - Show the project in action
+  - Include narration if helpful
+</ParamField>
+
+### Documents
+
+<ParamField path="documents" type="array">
+  Array of document URLs (optional)
+  
+  Best practices:
+  - Include case studies or detailed writeups
+  - Add technical documentation
+  - Share design files or specifications
+</ParamField>
+
+---
+
+## Code examples
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    // Create and publish a project
+    async function addPortfolioProject(
+      title: string,
+      description: string,
+      imageUrls: string[]
+    ) {
+      try {
+        // Step 1: Create draft
+        const draft = await trpc.project.createDraft.mutate();
+        
+        // Step 2: Update with content
+        const project = await trpc.project.createProject.mutate({
+          id: draft.id,
+          title,
+          description,
+          status: "published",
+          gallery: {
+            images: imageUrls,
+            videos: [],
+            documents: []
+          }
+        });
+        
+        console.log('Project published:', project.id);
+        return project;
+      } catch (error) {
+        console.error('Failed to create project:', error);
+      }
+    }
+
+    // Delete a project
+    async function removeProject(projectId: string) {
+      try {
+        const result = await trpc.project.delete.mutate({
+          id: projectId
+        });
+        
+        console.log('Project deleted:', result.id);
+      } catch (error) {
+        console.error('Failed to delete project:', error);
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="React Component">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+    import { useState } from 'react';
+
+    function ProjectForm() {
+      const [title, setTitle] = useState('');
+      const [description, setDescription] = useState('');
+      const [images, setImages] = useState<string[]>([]);
+      
+      const createDraftMutation = trpc.project.createDraft.useMutation();
+      const createProjectMutation = trpc.project.createProject.useMutation({
+        onSuccess: (data) => {
+          console.log('Project created:', data.id);
+        }
+      });
+
+      const handleSubmit = async () => {
+        // Create draft first
+        const draft = await createDraftMutation.mutateAsync();
+        
+        // Update with full content
+        await createProjectMutation.mutateAsync({
+          id: draft.id,
+          title,
+          description,
+          status: "published",
+          gallery: {
+            images,
+            videos: [],
+            documents: []
+          }
+        });
+      };
+
+      return (
+        <form onSubmit={handleSubmit}>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Project title"
+          />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Project description"
+          />
+          {/* Image upload UI */}
+          <button type="submit">
+            Publish Project
+          </button>
+        </form>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="Upload Flow">
+    ```typescript
+    // Complete flow with file uploads
+    async function createProjectWithUploads(
+      title: string,
+      description: string,
+      imageFiles: File[],
+      videoFiles: File[]
+    ) {
+      try {
+        // Step 1: Upload files
+        const imageUrls = await Promise.all(
+          imageFiles.map(file => uploadToS3(file))
+        );
+        
+        const videoUrls = await Promise.all(
+          videoFiles.map(file => uploadToS3(file))
+        );
+
+        // Step 2: Create draft
+        const draft = await trpc.project.createDraft.mutate();
+
+        // Step 3: Create project with uploaded URLs
+        const project = await trpc.project.createProject.mutate({
+          id: draft.id,
+          title,
+          description,
+          status: "published",
+          gallery: {
+            images: imageUrls,
+            videos: videoUrls,
+            documents: []
+          }
+        });
+
+        return project;
+      } catch (error) {
+        console.error('Failed to create project:', error);
+        throw error;
+      }
+    }
+
+    async function uploadToS3(file: File): Promise<string> {
+      // Get signed URL
+      const { url, key } = await trpc.file.generateUrl.mutate({
+        filename: file.name,
+        filetype: file.type
+      });
+
+      // Upload file
+      await fetch(url, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type }
+      });
+
+      // Return the public URL
+      return `https://${process.env.AWS_BUCKET_NAME}.s3.amazonaws.com/${key}`;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Best practices
+
+<Accordion title="Project titles">
+  - Be descriptive and specific
+  - Include the type of project and industry
+  - Keep it concise (under 100 characters)
+  - Examples: "E-commerce Platform for Fashion Retailer", "Mobile Banking App Redesign"
+</Accordion>
+
+<Accordion title="Project descriptions">
+  - Explain the problem you solved
+  - Describe your approach and technologies used
+  - Highlight key achievements and results
+  - Keep it between 200-500 words
+  - Use paragraphs for readability
+</Accordion>
+
+<Accordion title="Gallery curation">
+  - Show your best work first
+  - Include 3-5 high-quality images minimum
+  - Add videos for interactive projects
+  - Include case studies as documents
+  - Ensure all media is relevant to the project
+</Accordion>
+
+<Accordion title="Portfolio strategy">
+  - Showcase diverse projects to demonstrate range
+  - Keep your portfolio updated with recent work
+  - Remove outdated or weaker projects
+  - Quality over quantity - 5 great projects > 20 mediocre ones
+</Accordion>

@@ -1,0 +1,326 @@
+---
+title: API overview
+description: Learn about Khedma Market's tRPC-based API architecture and how to make type-safe API calls
+---
+
+## What is tRPC?
+
+Khedma Market uses [tRPC](https://trpc.io) to provide end-to-end type-safe APIs. Unlike traditional REST APIs, tRPC allows you to call server functions directly from your client code with full TypeScript type inference.
+
+### Key benefits
+
+- **Full type safety** - TypeScript types are automatically inferred from server to client
+- **No code generation** - Types flow automatically without build steps
+- **Excellent DX** - Autocomplete and inline documentation in your IDE
+- **Built on React Query** - Automatic caching, refetching, and optimistic updates
+
+## Architecture overview
+
+The Khedma Market API is built on three main layers:
+
+### Server layer
+
+The server defines procedures (queries and mutations) that clients can call:
+
+<CodeGroup>
+```typescript Server Context (trpc.ts)
+import { getServerAuthSession } from "@/server/auth";
+import { db } from "@/server/db";
+
+export const createTRPCContext = async (opts: { headers: Headers }) => {
+  const session = await getServerAuthSession();
+
+  return {
+    db,
+    session,
+    ...opts,
+  };
+};
+```
+
+```typescript App Router (root.ts)
+import { createTRPCRouter } from "@/server/api/trpc";
+import { userRouter } from "./routers/user";
+import { profileRouter } from "./routers/profile";
+import { gigRouter } from "./routers/gig";
+// ... other imports
+
+export const appRouter = createTRPCRouter({
+  user: userRouter,
+  profile: profileRouter,
+  gig: gigRouter,
+  project: projectRouter,
+  conversation: conversationRouter,
+  job: jobRouter,
+  order: orderRouter,
+  file: fileRouter,
+  category: CategoryRouter,
+});
+
+export type AppRouter = typeof appRouter;
+```
+</CodeGroup>
+
+### Client layer
+
+Khedma Market provides two client implementations:
+
+#### React client (for Client Components)
+
+<CodeGroup>
+```tsx Client Setup (react.tsx)
+"use client";
+
+import { createTRPCReact } from "@trpc/react-query";
+import { type AppRouter } from "@/server/api/root";
+
+export const api = createTRPCReact<AppRouter>();
+
+// Wrap your app with TRPCReactProvider
+export function TRPCReactProvider(props: { children: React.ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient());
+  const [trpcClient] = useState(() =>
+    api.createClient({
+      transformer: superjson,
+      links: [
+        unstable_httpBatchStreamLink({
+          url: getUrl(), // Points to /api/trpc
+        }),
+      ],
+    }),
+  );
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <api.Provider client={trpcClient} queryClient={queryClient}>
+        {props.children}
+      </api.Provider>
+    </QueryClientProvider>
+  );
+}
+```
+
+```tsx Usage in Components
+import { api } from "@/trpc/react";
+
+export function UserProfile() {
+  const { data: skills } = api.profile.getUserSkills.useQuery();
+  
+  return (
+    <div>
+      {skills?.map((skill) => (
+        <span key={skill.id}>{skill.name}</span>
+      ))}
+    </div>
+  );
+}
+```
+</CodeGroup>
+
+#### Server client (for Server Components)
+
+<CodeGroup>
+```typescript Server Setup (server.ts)
+import "server-only";
+import { createTRPCProxyClient } from "@trpc/client";
+import { appRouter, type AppRouter } from "@/server/api/root";
+import { createTRPCContext } from "@/server/api/trpc";
+
+export const api = createTRPCProxyClient<AppRouter>({
+  transformer: superjson,
+  links: [
+    // Direct function calls - no HTTP requests
+    () => ({ op }) =>
+      observable((observer) => {
+        createContext()
+          .then((ctx) => {
+            return callProcedure({
+              procedures: appRouter._def.procedures,
+              path: op.path,
+              rawInput: op.input,
+              ctx,
+              type: op.type,
+            });
+          })
+          .then((data) => {
+            observer.next({ result: { data } });
+            observer.complete();
+          })
+      }),
+  ],
+});
+```
+
+```tsx Usage in Server Components
+import { api } from "@/trpc/server";
+
+export default async function ProfilePage() {
+  const skills = await api.profile.getUserSkills.query();
+  
+  return (
+    <div>
+      {skills?.map((skill) => (
+        <span key={skill.id}>{skill.name}</span>
+      ))}
+    </div>
+  );
+}
+```
+</CodeGroup>
+
+<Info>
+  Server-side tRPC calls skip HTTP entirely and call procedures directly as functions, making them extremely fast.
+</Info>
+
+## Procedures
+
+tRPC has two types of procedures:
+
+### Queries
+
+Use queries for data fetching. Queries are cached and can be refetched:
+
+```typescript
+// Define a query
+export const profileRouter = createTRPCRouter({
+  getUserSkills: protectedProcedure.query(async ({ ctx }) => {
+    return await ctx.db.skill.findMany({
+      where: { userId: ctx.session.user.id },
+    });
+  }),
+});
+```
+
+### Mutations
+
+Use mutations for data modification. Mutations are not cached:
+
+```typescript
+// Define a mutation
+export const profileRouter = createTRPCRouter({
+  addSkill: protectedProcedure
+    .input(z.object({
+      name: z.string(),
+      level: z.enum(["beginner", "intermediate", "advanced", "expert"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      return await ctx.db.skill.create({
+        data: {
+          name: input.name,
+          level: input.level,
+          userId: ctx.session.user.id,
+        },
+      });
+    }),
+});
+```
+
+## Input validation
+
+All procedures use [Zod](https://zod.dev) for input validation:
+
+```typescript
+import { z } from "zod";
+
+export const userRouter = createTRPCRouter({
+  getUserbyUsername: protectedProcedure
+    .input(z.object({ 
+      username: z.string() 
+    }))
+    .query(async ({ input, ctx }) => {
+      return await ctx.db.user.findFirst({
+        where: { username: input.username },
+      });
+    }),
+});
+```
+
+<Note>
+  If validation fails, tRPC automatically returns a formatted error with the Zod validation issues.
+</Note>
+
+## Error handling
+
+Handle tRPC errors using the `TRPCError` class:
+
+<CodeGroup>
+```typescript Server-side
+import { TRPCError } from "@trpc/server";
+
+export const userRouter = createTRPCRouter({
+  updateAccount: protectedProcedure
+    .input(z.object({ username: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.db.user.findFirst({
+        where: { 
+          username: input.username,
+          NOT: { id: ctx.session.user.id },
+        },
+      });
+
+      if (existing) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Username already taken",
+          cause: { username: "Username already taken" },
+        });
+      }
+
+      return await ctx.db.user.update({
+        where: { id: ctx.session.user.id },
+        data: { username: input.username },
+      });
+    }),
+});
+```
+
+```tsx Client-side
+import { api } from "@/trpc/react";
+
+export function UpdateUsername() {
+  const mutation = api.user.updateAccount.useMutation({
+    onError: (error) => {
+      if (error.data?.code === "BAD_REQUEST") {
+        toast.error(error.message);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Username updated!");
+    },
+  });
+
+  return (
+    <button onClick={() => mutation.mutate({ username: "newname" })}>
+      Update
+    </button>
+  );
+}
+```
+</CodeGroup>
+
+## Type inference
+
+Infer types from your router for use throughout your application:
+
+```typescript
+import { type RouterInputs, type RouterOutputs } from "@/trpc/shared";
+
+// Input type for a procedure
+type AddSkillInput = RouterInputs["profile"]["addSkill"];
+// { name: string; level: "beginner" | "intermediate" | "advanced" | "expert" }
+
+// Output type for a procedure
+type UserSkills = RouterOutputs["profile"]["getUserSkills"];
+// Array<{ id: string; name: string; value: string; level: string }>
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/api/authentication">
+    Learn how authentication works with NextAuth and protected procedures
+  </Card>
+  <Card title="Users API" icon="code" href="/api/users">
+    Browse user management endpoints and schemas
+  </Card>
+</CardGroup>

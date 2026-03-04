@@ -1,0 +1,533 @@
+---
+title: Authentication system
+description: Understanding authentication, authorization, and session management in Khedma Market
+---
+
+Khedma Market uses NextAuth.js v4 for a complete authentication solution with support for credentials, OAuth providers, email verification, and two-factor authentication.
+
+## Authentication configuration
+
+Authentication is configured in `src/server/auth.ts` using NextAuth.js with the Prisma adapter.
+
+```typescript src/server/auth.ts
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import { NextAuthOptions } from "next-auth";
+import { db } from "@/server/db";
+
+export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(db),
+  session: {
+    strategy: "jwt",
+  },
+  providers: [
+    // Configured providers
+  ],
+  callbacks: {
+    // Custom callbacks
+  },
+};
+```
+
+## Authentication providers
+
+The platform supports multiple authentication methods:
+
+<CodeGroup>
+```typescript GitHub OAuth
+GithubProvider({
+  clientId: env.GITHUB_CLIENT_ID,
+  clientSecret: env.GITHUB_CLIENT_SECRET,
+  allowDangerousEmailAccountLinking: true,
+})
+```
+
+```typescript Google OAuth
+GoogleProvider({
+  clientId: env.GOOGLE_CLIENT_ID,
+  clientSecret: env.GOOGLE_CLIENT_SECRET,
+  allowDangerousEmailAccountLinking: true,
+})
+```
+
+```typescript Credentials
+Credentials({
+  async authorize(credentials) {
+    const validatedFields = LoginSchema.safeParse(credentials);
+    
+    if (validatedFields.success) {
+      const { email, password } = validatedFields.data;
+      const user = await getUserByEmail(email);
+      
+      if (!user || !user.password) return null;
+      
+      const passwordsMatch = await bcrypt.compare(
+        password,
+        user.password
+      );
+      
+      if (passwordsMatch) return user;
+    }
+    
+    return null;
+  },
+})
+```
+</CodeGroup>
+
+<Note>
+  OAuth providers use `allowDangerousEmailAccountLinking: true` to automatically link accounts with the same email address.
+</Note>
+
+## Session management
+
+The application uses JWT-based sessions for better performance:
+
+```typescript
+session: {
+  strategy: "jwt",
+}
+```
+
+### Extended session type
+
+The session is extended with custom user properties:
+
+```typescript src/server/auth.ts
+export type ExtendedUser = DefaultSession["user"] & {
+  id: string;
+  role: role;
+  username: string;
+  isTwoFactorEnabled: boolean;
+  isOAuth: boolean;
+};
+
+declare module "next-auth" {
+  interface Session {
+    user: ExtendedUser;
+  }
+}
+```
+
+## Callbacks
+
+Custom callbacks handle session and JWT token population:
+
+<Accordion title="Session callback">
+  Populates the session with user data from the JWT token:
+
+  ```typescript
+  async session({ token, session }) {
+    if (token.sub && session.user) {
+      session.user.id = token.sub;
+    }
+
+    if (token.role && session.user) {
+      session.user.role = token.role as role;
+    }
+
+    if (session.user) {
+      session.user.isTwoFactorEnabled = token.isTwoFactorEnabled as boolean;
+      session.user.name = token.name;
+      session.user.username = token.username as string;
+      session.user.email = token.email;
+      session.user.isOAuth = token.isOAuth as boolean;
+    }
+
+    return session;
+  }
+  ```
+</Accordion>
+
+<Accordion title="JWT callback">
+  Enriches the JWT token with user data from the database:
+
+  ```typescript
+  async jwt({ token }) {
+    if (!token.sub) return token;
+
+    const existingUser = await getUserById(token.sub);
+    if (!existingUser) return token;
+    
+    const existingAccount = await getAccountByUserId(existingUser.id);
+    
+    token.name = existingUser.name;
+    token.username = existingUser.username;
+    token.email = existingUser.email;
+    token.role = existingUser.role;
+    token.isOAuth = !!existingAccount;
+    token.isTwoFactorEnabled = existingUser.isTwoFactorEnabled;
+
+    return token;
+  }
+  ```
+</Accordion>
+
+<Accordion title="Sign in callback">
+  Validates email verification and two-factor authentication:
+
+  ```typescript
+  async signIn({ user, account }) {
+    // Allow OAuth without email verification
+    if (account?.provider !== "credentials") return true;
+
+    const existingUser = await getUserById(user.id);
+
+    // Prevent sign in without email verification
+    if (!existingUser?.emailVerified) return false;
+
+    if (existingUser.isTwoFactorEnabled) {
+      const twoFactorConfirmation = await getTwoFactorConfirmationByUserId(
+        existingUser.id,
+      );
+
+      if (!twoFactorConfirmation) return false;
+
+      // Delete two factor confirmation for next sign in
+      await db.twoFactorConfirmation.delete({
+        where: { id: twoFactorConfirmation.id },
+      });
+    }
+
+    return true;
+  }
+  ```
+</Accordion>
+
+## Server actions
+
+Authentication flows are implemented as server actions:
+
+### Logout
+
+```typescript src/actions/logout.ts
+"use server";
+
+import { signOut } from "@/server/auth";
+
+export const logout = async () => {
+  await signOut();
+};
+```
+
+### Password reset
+
+```typescript src/actions/reset.ts
+"use server";
+
+import { getUserByEmail } from "@/lib/helpers/user";
+import { sendPasswordResetEmail } from "@/lib/helpers/mail";
+import { generatePasswordResetToken } from "@/lib/helpers/tokens";
+
+export const reset = async (values: z.infer<typeof ResetSchema>) {
+  const validatedFields = ResetSchema.safeParse(values);
+
+  if (!validatedFields.success) {
+    return { error: "Invalid email!" };
+  }
+
+  const { email } = validatedFields.data;
+  const existingUser = await getUserByEmail(email);
+
+  if (!existingUser) {
+    return { error: "Email not found!" };
+  }
+
+  const passwordResetToken = await generatePasswordResetToken(email);
+  await sendPasswordResetEmail(
+    passwordResetToken.email,
+    passwordResetToken.token,
+  );
+
+  return { success: "Reset email sent!" };
+}
+```
+
+### Email verification
+
+```typescript src/actions/new-verification.ts
+"use server";
+
+import { db } from "@/server/db";
+import { getUserByEmail } from "@/lib/helpers/user";
+import { getVerificationTokenByToken } from "@/lib/helpers/verification-token";
+
+export const newVerification = async (token: string) {
+  const existingToken = await getVerificationTokenByToken(token);
+
+  if (!existingToken) {
+    return { error: "Token does not exist!" };
+  }
+
+  const hasExpired = new Date(existingToken.expires) < new Date();
+
+  if (hasExpired) {
+    return { error: "Token has expired!", email: existingToken.email };
+  }
+
+  const existingUser = await getUserByEmail(existingToken.email);
+
+  if (!existingUser) {
+    return { error: "Email does not exist!" };
+  }
+
+  await db.user.update({
+    where: { id: existingUser.id },
+    data: {
+      emailVerified: new Date(),
+      email: existingToken.email,
+    },
+  });
+
+  await db.verificationToken.delete({
+    where: { id: existingToken.id },
+  });
+
+  return { success: "Email verified!" };
+};
+```
+
+## Email verification flow
+
+When users sign up with credentials:
+
+<Steps>
+  <Step title="Generate token">
+    A verification token is generated with 1-hour expiry:
+
+    ```typescript
+    export const generateVerificationToken = async (email: string) => {
+      const token = uuidv4();
+      const expires = new Date(new Date().getTime() + 3600 * 1000);
+
+      const existingToken = await getVerificationTokenByEmail(email);
+
+      if (existingToken) {
+        await db.verificationToken.delete({
+          where: { id: existingToken.id },
+        });
+      }
+
+      const verificationToken = await db.verificationToken.create({
+        data: { email, token, expires },
+      });
+
+      await sendVerificationEmail(
+        verificationToken.email,
+        verificationToken.token
+      );
+
+      return verificationToken;
+    };
+    ```
+  </Step>
+
+  <Step title="Send email">
+    The token is sent via email using Resend:
+
+    ```typescript
+    await sendVerificationEmail(
+      verificationToken.email,
+      verificationToken.token
+    );
+    ```
+  </Step>
+
+  <Step title="User clicks link">
+    User receives email and clicks verification link
+  </Step>
+
+  <Step title="Verify token">
+    The `newVerification` action validates the token and marks email as verified
+  </Step>
+</Steps>
+
+## Two-factor authentication
+
+Users can enable 2FA for additional security:
+
+### Database models
+
+```prisma
+model TwoFactorToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+model TwoFactorConfirmation {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+```
+
+### 2FA flow
+
+1. User enables 2FA in settings (`user.isTwoFactorEnabled = true`)
+2. During sign in, after credentials are validated:
+   - A 2FA token is generated and sent via email
+   - User must enter the token to complete sign in
+   - A `TwoFactorConfirmation` record is created
+3. On subsequent sign in, the confirmation is deleted
+
+## Authorization patterns
+
+### Accessing session in Server Components
+
+```tsx
+import { getServerAuthSession } from "@/server/auth";
+
+export default async function DashboardPage() {
+  const session = await getServerAuthSession();
+  
+  if (!session) {
+    redirect("/auth/sign-in");
+  }
+  
+  return <Dashboard user={session.user} />;
+}
+```
+
+### Accessing session in Client Components
+
+```tsx
+'use client';
+
+import { useSession } from "next-auth/react";
+
+export function ProfileButton() {
+  const { data: session, status } = useSession();
+  
+  if (status === "loading") return <Skeleton />;
+  if (!session) return <SignInButton />;
+  
+  return <UserMenu user={session.user} />;
+}
+```
+
+### Protected tRPC procedures
+
+```typescript
+import { protectedProcedure } from "@/server/api/trpc";
+
+export const gigRouter = createTRPCRouter({
+  create: protectedProcedure
+    .input(createGigSchema)
+    .mutation(async ({ ctx, input }) => {
+      // ctx.session.user is guaranteed to exist
+      return ctx.db.gig.create({
+        data: {
+          ...input,
+          ownerId: ctx.session.user.id,
+        },
+      });
+    }),
+});
+```
+
+### Role-based authorization
+
+```typescript
+// Middleware for role checking
+const enforceUserIsFreelancer = t.middleware(({ ctx, next }) => {
+  if (!ctx.session || ctx.session.user.role !== "freelancer") {
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+  return next({ ctx });
+});
+
+export const freelancerProcedure = protectedProcedure.use(
+  enforceUserIsFreelancer
+);
+```
+
+## Password security
+
+Passwords are hashed using bcrypt:
+
+```typescript
+import bcrypt from "bcryptjs";
+
+// Hashing password during registration
+const hashedPassword = await bcrypt.hash(password, 10);
+
+// Comparing password during login
+const passwordsMatch = await bcrypt.compare(
+  password,
+  user.password
+);
+```
+
+## Custom pages
+
+Authentication pages are customized:
+
+```typescript
+export const authOptions: NextAuthOptions = {
+  // ...
+  pages: {
+    signIn: "/auth/sign-in",
+    error: "/auth/error",
+  },
+};
+```
+
+## Environment variables
+
+Required authentication environment variables:
+
+```bash .env
+# NextAuth
+NEXTAUTH_SECRET="your-secret-here"
+NEXTAUTH_URL="http://localhost:3000"
+
+# GitHub OAuth
+GITHUB_CLIENT_ID="your-github-client-id"
+GITHUB_CLIENT_SECRET="your-github-client-secret"
+
+# Google OAuth
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+
+# Email (Resend)
+RESEND_API_KEY="your-resend-api-key"
+FROM_EMAIL="noreply@khedma.market"
+```
+
+## Events
+
+NextAuth events handle side effects:
+
+```typescript
+events: {
+  async linkAccount({ user }) {
+    // Mark email as verified when OAuth account is linked
+    await db.user.update({
+      where: { id: user.id },
+      data: { emailVerified: new Date() },
+    });
+  },
+  createUser: async (message) => {
+    console.log("createUser", message);
+  },
+}
+```
+
+## Best practices
+
+<Note>
+  - Always use `getServerAuthSession()` in Server Components
+  - Use `protectedProcedure` for authenticated tRPC endpoints
+  - Validate user roles before performing sensitive operations
+  - Never expose authentication tokens to the client
+  - Always hash passwords before storing in database
+</Note>
+
+## Next steps
+
+- Review the [database schema](/development/database-schema)
+- Understand the [architecture](/development/architecture)
+- Explore [API routes](/api-reference)

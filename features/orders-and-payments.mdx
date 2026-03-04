@@ -1,0 +1,423 @@
+---
+title: Orders and payments
+description: Understand how orders are processed and payments are handled on Khedma Market
+---
+
+The orders and payments system manages the complete transaction lifecycle from purchase to completion, ensuring secure payments and clear order tracking.
+
+## Order lifecycle
+
+Every order goes through a series of stages:
+
+<CardGroup cols={4}>
+  <Card title="Pending" icon="clock">
+    Order created, awaiting payment
+  </Card>
+  <Card title="Processing" icon="spinner">
+    Payment confirmed, work in progress
+  </Card>
+  <Card title="Completed" icon="circle-check">
+    Work delivered and accepted
+  </Card>
+  <Card title="Cancelled" icon="circle-xmark">
+    Order cancelled by either party
+  </Card>
+</CardGroup>
+
+```typescript
+enum OrderStatus {
+  pending
+  processing
+  completed
+  cancelled
+}
+```
+
+## Creating an order
+
+Orders are created when a client purchases a gig:
+
+### Selecting a package
+
+1. Browse gigs and find a service
+2. View gig details and packages
+3. Select your desired package:
+   - Basic: Core service
+   - Standard: Enhanced features
+   - Premium: Complete package
+4. Review package details:
+   - Price
+   - Delivery time
+   - Number of revisions
+   - What's included
+
+### Order creation process
+
+When you click "Order Now":
+
+```typescript
+model Order {
+  id          String      @id @default(cuid())
+  userId      String      // Buyer
+  gigId       String      // Service ordered
+  packageId   String      // Selected package
+  status      OrderStatus @default(pending)
+  totalAmount Float       // Price in MAD
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  user        User        @relation(fields: [userId], references: [id])
+  gig         Gig         @relation(fields: [gigId], references: [id])
+  package     Package     @relation(fields: [packageId], references: [id])
+  payment     Payment?
+}
+```
+
+The order captures:
+- Which user is buying
+- Which gig and package
+- Total amount
+- Initial status (pending)
+
+<Info>
+  Orders remain in "pending" status until payment is confirmed.
+</Info>
+
+## Payment processing
+
+Khedma Market uses YouCan Pay for secure payment processing:
+
+### Payment flow
+
+1. **Order creation**: Order is created with status "pending"
+2. **Payment tokenization**: Amount is tokenized for secure processing
+3. **Payment page**: User is redirected to payment gateway
+4. **Payment completion**: User completes payment
+5. **Confirmation**: Platform receives payment confirmation
+6. **Order update**: Order status changes to "processing"
+
+```typescript
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String        @unique
+  status        PaymentStatus @default(pending)
+  amount        Float
+  paymentMethod String        // Payment method used
+  transactionId String?       // Gateway transaction ID
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  order         Order         @relation(fields: [orderId], references: [id])
+}
+```
+
+### Payment statuses
+
+```typescript
+enum PaymentStatus {
+  pending   // Awaiting payment
+  success   // Payment confirmed
+  failed    // Payment failed
+}
+```
+
+### Payment tokenization
+
+Before redirecting to payment:
+
+```typescript
+const tokenizePayment = async (
+  amount: number,
+  currency: string,
+  orderId: string
+) => {
+  const formData = new FormData();
+  formData.append('amount', amount.toString());
+  formData.append('currency', currency);
+  formData.append('pri_key', process.env.PRIVATE_YOUCAN_KEY);
+  formData.append('order_id', orderId);
+  
+  const response = await youcan.post('/tokenize', formData);
+  
+  return response.data.token.id;
+};
+```
+
+This creates a secure payment token used for processing.
+
+<Note>
+  Payment details are handled securely by the payment gateway. Khedma Market never stores sensitive payment information.
+</Note>
+
+## Order management
+
+### For buyers
+
+**After placing an order:**
+
+1. Complete payment through the gateway
+2. Receive order confirmation
+3. Access order details in your dashboard
+4. Communicate with seller through messaging
+5. Receive deliverables from the freelancer
+6. Review and approve the work
+7. Request revisions if needed (within package limits)
+
+**Viewing your orders:**
+
+- Navigate to "Orders" in your dashboard
+- See all orders with current status
+- Filter by status (pending, processing, completed)
+- Click into an order for full details
+
+**Order details include:**
+- Gig and package purchased
+- Seller information
+- Amount paid
+- Order date
+- Expected delivery date
+- Current status
+- Link to conversation with seller
+
+### For sellers
+
+**When you receive an order:**
+
+1. Receive notification of new order
+2. Order appears in your dashboard with "processing" status
+3. Review order details and requirements
+4. Communicate with buyer if clarification needed
+5. Complete the work according to package specifications
+6. Deliver work through the platform
+7. Request order completion
+
+**Tracking your orders:**
+
+- View all orders in your seller dashboard
+- See orders by status
+- Track delivery deadlines
+- Access buyer communication
+- View order payment details
+
+<CardGroup cols={2}>
+  <Card title="Active orders" icon="list-check">
+    Orders currently in progress requiring your attention
+  </Card>
+  <Card title="Completed orders" icon="circle-check">
+    Finished orders with confirmed delivery
+  </Card>
+</CardGroup>
+
+## Delivery and completion
+
+### Delivering work
+
+As a seller, deliver completed work:
+
+1. Prepare final deliverables
+2. Upload files or provide access
+3. Send delivery notification to buyer
+4. Await buyer confirmation
+
+**Delivery methods:**
+- Upload files through messaging
+- Share download links
+- Provide access to online resources
+- Send completed work as message attachments
+
+### Requesting revisions
+
+Buyers can request changes:
+
+- Revisions included in package:
+  - Basic: Limited revisions
+  - Standard: More revisions
+  - Premium: Maximum revisions
+
+- Revision workflow:
+  1. Buyer reviews delivered work
+  2. Requests specific changes via message
+  3. Seller makes revisions
+  4. Delivers updated version
+  5. Process repeats until approved or revisions exhausted
+
+<Info>
+  Number of revisions is defined in the package. Additional revisions may require a new order or custom arrangement.
+</Info>
+
+### Marking orders complete
+
+Orders are completed when:
+
+1. **Buyer approval**: Buyer reviews and accepts the work
+2. **Auto-completion**: Order auto-completes after delivery if no action taken (platform-specific timeline)
+3. **Mutual agreement**: Both parties agree work is complete
+
+```typescript
+const completeOrder = async (orderId: string) => {
+  return await db.order.update({
+    where: { id: orderId },
+    data: { status: 'completed' }
+  });
+};
+```
+
+## Order cancellation
+
+Orders can be cancelled under certain conditions:
+
+### Before work begins
+
+- Buyer can request cancellation
+- Seller can accept or decline
+- If accepted, refund is processed
+
+### After work begins
+
+- Mutual agreement required
+- Partial payment may apply based on work completed
+- Platform support can mediate disputes
+
+### Cancellation process
+
+1. One party requests cancellation
+2. Other party is notified
+3. Cancellation reason provided
+4. If accepted, order status changes to "cancelled"
+5. Refund processed according to policy
+
+```typescript
+const cancelOrder = async (orderId: string) => {
+  await db.order.update({
+    where: { id: orderId },
+    data: { status: 'cancelled' }
+  });
+  
+  // Process refund if payment was made
+  const payment = await db.payment.findUnique({
+    where: { orderId }
+  });
+  
+  if (payment?.status === 'success') {
+    // Initiate refund process
+  }
+};
+```
+
+<Note>
+  Cancellation policies protect both buyers and sellers. Review the platform's cancellation policy before requesting cancellation.
+</Note>
+
+## Reviews and ratings
+
+After order completion, buyers can leave reviews:
+
+```typescript
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1-5 stars
+  comment   String
+  gigId     String
+  userId    String   // Reviewer (buyer)
+  createdAt DateTime @default(now())
+  gig       Gig      @relation(fields: [gigId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+```
+
+**Leaving a review:**
+
+1. Order must be completed
+2. Navigate to completed order
+3. Click "Leave Review"
+4. Provide:
+   - Star rating (1-5)
+   - Written feedback
+5. Submit review
+
+**Review impact:**
+
+- Appears on the gig page
+- Contributes to seller's overall rating
+- Visible to future buyers
+- Helps build seller reputation
+
+<CardGroup cols={2}>
+  <Card title="For buyers" icon="star">
+    Leave honest feedback to help other buyers
+  </Card>
+  <Card title="For sellers" icon="trophy">
+    Good reviews increase visibility and sales
+  </Card>
+</CardGroup>
+
+## Order notifications
+
+Stay informed about order updates:
+
+**Notification triggers:**
+- New order received (seller)
+- Payment confirmed
+- Delivery submitted
+- Revision requested
+- Order completed
+- Review received
+
+**Notification channels:**
+- In-app notifications
+- Email notifications (if enabled)
+- Dashboard alerts
+
+```typescript
+// User notification preferences
+user.orderUpdatesNotifications: boolean
+```
+
+Control notification settings:
+1. Go to account settings
+2. Navigate to notifications
+3. Toggle order update notifications
+4. Save preferences
+
+## Financial overview
+
+### For sellers
+
+Track your earnings:
+
+- View total earnings
+- See earnings per gig
+- Track pending payments
+- Monitor completed transactions
+- Access payment history
+
+### For buyers
+
+Manage your spending:
+
+- View total spent
+- See spending by category
+- Track active orders
+- Access payment receipts
+- Review transaction history
+
+## Payment security
+
+Khedma Market ensures secure transactions:
+
+<CardGroup cols={2}>
+  <Card title="Secure gateway" icon="lock">
+    All payments processed through YouCan Pay
+  </Card>
+  <Card title="No card storage" icon="shield">
+    Payment details never stored on Khedma Market
+  </Card>
+  <Card title="Encrypted transactions" icon="key">
+    All payment data encrypted in transit
+  </Card>
+  <Card title="Buyer protection" icon="user-shield">
+    Funds held until delivery confirmed
+  </Card>
+</CardGroup>
+
+<Info>
+  For payment disputes or issues, contact platform support with your order ID for assistance.
+</Info>

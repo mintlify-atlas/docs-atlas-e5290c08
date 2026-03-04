@@ -1,0 +1,341 @@
+---
+title: Users API
+description: Manage user accounts, personal information, security settings, and account setup
+---
+
+The Users API provides endpoints for managing user profiles, authentication settings, and account configuration in Khedma Market.
+
+## Get user by username
+
+Retrieve a user's basic information by their username.
+
+```typescript
+const user = await trpc.user.getUserbyUsername.query({
+  username: "johndoe"
+});
+```
+
+### Input parameters
+
+<ParamField path="username" type="string" required>
+  The username of the user to retrieve
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  Unique identifier for the user
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  The user's username
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Update user personal information
+
+Update the authenticated user's personal information including name, contact details, and profile information.
+
+```typescript
+const result = await trpc.user.updateUserPersonalInfo.mutate({
+  firstName: "John",
+  lastName: "Doe",
+  email: "john@example.com",
+  dob: new Date("1990-01-01"),
+  bio: "Experienced developer",
+  country: "Morocco",
+  city: "Casablanca",
+  address: "123 Main St",
+  phone: "+212600000000",
+  website: "https://johndoe.com",
+  profilePic: "https://example.com/avatar.jpg",
+  resume: "https://example.com/resume.pdf"
+});
+```
+
+### Input parameters
+
+<ParamField path="firstName" type="string">
+  User's first name
+</ParamField>
+
+<ParamField path="lastName" type="string">
+  User's last name
+</ParamField>
+
+<ParamField path="email" type="string">
+  User's email address
+</ParamField>
+
+<ParamField path="dob" type="Date">
+  Date of birth
+</ParamField>
+
+<ParamField path="bio" type="string">
+  User biography or description
+</ParamField>
+
+<ParamField path="country" type="string">
+  Country of residence
+</ParamField>
+
+<ParamField path="city" type="string">
+  City of residence
+</ParamField>
+
+<ParamField path="address" type="string">
+  Physical address
+</ParamField>
+
+<ParamField path="phone" type="string">
+  Contact phone number
+</ParamField>
+
+<ParamField path="website" type="string">
+  Personal or professional website URL
+</ParamField>
+
+<ParamField path="profilePic" type="string">
+  URL to profile picture
+</ParamField>
+
+<ParamField path="resume" type="string">
+  URL to resume/CV document
+</ParamField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Update user security information
+
+Update security settings including username, password, and two-factor authentication.
+
+```typescript
+const result = await trpc.user.updateUserSecurityInfo.mutate({
+  username: "newusername",
+  currentpassword: "oldpassword123",
+  newpassword: "newpassword456",
+  confirmPassword: "newpassword456",
+  isTwoFactorEnabled: true
+});
+```
+
+### Input parameters
+
+<ParamField path="username" type="string">
+  New username (must be unique)
+</ParamField>
+
+<ParamField path="currentpassword" type="string">
+  Current password (required when changing password)
+</ParamField>
+
+<ParamField path="newpassword" type="string">
+  New password
+</ParamField>
+
+<ParamField path="confirmPassword" type="string">
+  Password confirmation (must match newpassword)
+</ParamField>
+
+<ParamField path="isTwoFactorEnabled" type="boolean">
+  Enable or disable two-factor authentication
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  User ID
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  Updated username
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  User email
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **BAD_REQUEST**: Username already taken
+  - **BAD_REQUEST**: Invalid password (when current password is incorrect)
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Check username availability
+
+Check if a username is available for use.
+
+```typescript
+const result = await trpc.user.checkUsername.mutate({
+  username: "newusername"
+});
+
+console.log(result.isTaken); // false if available
+```
+
+### Input parameters
+
+<ParamField path="username" type="string" required>
+  Username to check
+</ParamField>
+
+### Response
+
+<ResponseField name="username" type="string">
+  The checked username
+</ResponseField>
+
+<ResponseField name="isTaken" type="boolean">
+  True if username is taken, false if available
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Update account type
+
+Update the user's account type and username during initial setup.
+
+```typescript
+const result = await trpc.user.updateAccount.mutate({
+  signUpAs: "freelancer",
+  username: "johndoe"
+});
+```
+
+### Input parameters
+
+<ParamField path="signUpAs" type="enum" required>
+  Account type: `client`, `freelancer`, or `company`
+  
+  Default: `client`
+</ParamField>
+
+<ParamField path="username" type="string" required>
+  Desired username (must be unique)
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  User ID
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  Updated user role
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  Updated username
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **BAD_REQUEST**: Username already taken
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Create company profile
+
+Create a company profile for users with a company account type.
+
+```typescript
+const company = await trpc.user.createCompany.mutate({
+  name: "Tech Solutions Inc",
+  logo: "https://example.com/logo.png",
+  industry: "Software Development",
+  location: "Casablanca, Morocco",
+  description: "Leading software development company",
+  contactEmail: "contact@techsolutions.com",
+  website: "https://techsolutions.com"
+});
+```
+
+### Input parameters
+
+<ParamField path="name" type="string" required>
+  Company name (max 250 characters)
+</ParamField>
+
+<ParamField path="logo" type="string" required>
+  URL to company logo
+</ParamField>
+
+<ParamField path="industry" type="string" required>
+  Industry or business sector (max 250 characters)
+</ParamField>
+
+<ParamField path="location" type="string" required>
+  Company location (max 250 characters)
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Company description (max 250 characters)
+</ParamField>
+
+<ParamField path="contactEmail" type="string" required>
+  Contact email address
+</ParamField>
+
+<ParamField path="website" type="string">
+  Company website URL (optional, max 250 characters)
+</ParamField>
+
+### Response
+
+Returns the created company object with all provided fields plus:
+
+<ResponseField name="id" type="string">
+  Unique company identifier
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  ID of the user who owns the company
+</ResponseField>
+
+<ResponseField name="createdAt" type="Date">
+  Company creation timestamp
+</ResponseField>
+
+<ResponseField name="updatedAt" type="Date">
+  Last update timestamp
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **BAD_REQUEST**: User is not signed up as a company
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+<Note>
+Only users with role "company" can create a company profile.
+</Note>

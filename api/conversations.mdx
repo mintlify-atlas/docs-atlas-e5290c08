@@ -1,0 +1,343 @@
+---
+title: Conversations API
+description: Manage real-time messaging between users, including message sending and conversation retrieval
+---
+
+The Conversations API enables direct messaging between users on Khedma Market.
+
+## Get conversation
+
+Retrieve a conversation between two users.
+
+```typescript
+const conversation = await trpc.conversation.getConverstion.query({
+  userId: "current_user_id",
+  otherUserId: "other_user_id"
+});
+```
+
+### Input parameters
+
+<ParamField path="userId" type="string" required>
+  ID of the current user
+</ParamField>
+
+<ParamField path="otherUserId" type="string" required>
+  ID of the other user in the conversation
+</ParamField>
+
+### Response
+
+Returns a conversation object with:
+
+<ResponseField name="id" type="string">
+  Unique conversation identifier
+</ResponseField>
+
+<ResponseField name="senderId" type="string">
+  ID of the conversation initiator
+</ResponseField>
+
+<ResponseField name="receiverId" type="string">
+  ID of the conversation recipient
+</ResponseField>
+
+<ResponseField name="sender" type="object">
+  Sender user details:
+  - `id`: string
+  - `name`: string
+  - `email`: string
+  - `username`: string
+  - `image`: string
+</ResponseField>
+
+<ResponseField name="receiver" type="object">
+  Receiver user details (same structure as sender)
+</ResponseField>
+
+<ResponseField name="messages" type="array">
+  Array of message objects sorted by creation date:
+  - `id`: string
+  - `content`: string
+  - `createdAt`: Date
+  - `updatedAt`: Date
+  - `user`: User object
+  - `attachements`: Array of attachment objects
+</ResponseField>
+
+<ResponseField name="createdAt" type="Date">
+  Conversation creation timestamp
+</ResponseField>
+
+<ResponseField name="updatedAt" type="Date">
+  Last update timestamp
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **NOT_FOUND**: Conversation not found
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Send message
+
+Send a message in a conversation.
+
+```typescript
+const message = await trpc.conversation.sendMessage.mutate({
+  conversationId: "conversation_id",
+  content: "Hello, I'm interested in your gig!",
+  attachements: [
+    {
+      name: "requirements.pdf",
+      url: "https://example.com/requirements.pdf"
+    }
+  ]
+});
+```
+
+### Input parameters
+
+<ParamField path="conversationId" type="string" required>
+  ID of the conversation to send the message in
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  Message text content
+</ParamField>
+
+<ParamField path="attachements" type="array" required>
+  Array of attachment objects (can be empty):
+  - `name`: string - File name
+  - `url`: string - File URL
+</ParamField>
+
+### Response
+
+Returns the created message object:
+
+<ResponseField name="id" type="string">
+  Unique message identifier
+</ResponseField>
+
+<ResponseField name="content" type="string">
+  Message content
+</ResponseField>
+
+<ResponseField name="conversationId" type="string">
+  ID of the conversation
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  ID of the user who sent the message
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  Sender user details
+</ResponseField>
+
+<ResponseField name="createdAt" type="Date">
+  Message creation timestamp
+</ResponseField>
+
+<ResponseField name="updatedAt" type="Date">
+  Last update timestamp
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Message attachments
+
+Messages can include file attachments. Each attachment contains:
+
+<ResponseField name="id" type="string">
+  Unique attachment identifier
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  File name
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  File URL for download
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Attachment type (e.g., "document", "image", "video")
+</ResponseField>
+
+---
+
+## Code examples
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    // Get conversation between two users
+    async function getConversation(userId: string, otherUserId: string) {
+      try {
+        const conversation = await trpc.conversation.getConverstion.query({
+          userId,
+          otherUserId
+        });
+        
+        console.log('Conversation loaded:', conversation.id);
+        console.log('Messages:', conversation.messages.length);
+        return conversation;
+      } catch (error) {
+        console.error('Failed to load conversation:', error);
+      }
+    }
+
+    // Send a message
+    async function sendMessage(
+      conversationId: string,
+      content: string,
+      files: File[] = []
+    ) {
+      try {
+        // Upload files first and get URLs
+        const attachements = await Promise.all(
+          files.map(async (file) => ({
+            name: file.name,
+            url: await uploadFile(file)
+          }))
+        );
+
+        const message = await trpc.conversation.sendMessage.mutate({
+          conversationId,
+          content,
+          attachements
+        });
+        
+        console.log('Message sent:', message.id);
+        return message;
+      } catch (error) {
+        console.error('Failed to send message:', error);
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="React Hook">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+    import { useState } from 'react';
+
+    function ChatComponent({ conversationId }: { conversationId: string }) {
+      const [messageContent, setMessageContent] = useState('');
+      
+      const sendMessageMutation = trpc.conversation.sendMessage.useMutation({
+        onSuccess: (data) => {
+          console.log('Message sent:', data.id);
+          setMessageContent('');
+        },
+        onError: (error) => {
+          console.error('Failed to send message:', error.message);
+        }
+      });
+
+      const handleSend = () => {
+        if (!messageContent.trim()) return;
+        
+        sendMessageMutation.mutate({
+          conversationId,
+          content: messageContent,
+          attachements: []
+        });
+      };
+
+      return (
+        <div>
+          <input
+            value={messageContent}
+            onChange={(e) => setMessageContent(e.target.value)}
+            placeholder="Type a message..."
+          />
+          <button 
+            onClick={handleSend}
+            disabled={sendMessageMutation.isLoading}
+          >
+            {sendMessageMutation.isLoading ? 'Sending...' : 'Send'}
+          </button>
+        </div>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="Real-time Updates">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+    import { useEffect } from 'react';
+
+    function ConversationView({ userId, otherUserId }: Props) {
+      // Query conversation
+      const { data: conversation, refetch } = 
+        trpc.conversation.getConverstion.useQuery({
+          userId,
+          otherUserId
+        });
+
+      // Set up polling for new messages
+      useEffect(() => {
+        const interval = setInterval(() => {
+          refetch();
+        }, 3000); // Poll every 3 seconds
+
+        return () => clearInterval(interval);
+      }, [refetch]);
+
+      return (
+        <div>
+          {conversation?.messages.map(message => (
+            <div key={message.id}>
+              <strong>{message.user.name}:</strong> {message.content}
+              {message.attachements.map(att => (
+                <a key={att.id} href={att.url}>{att.name}</a>
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Best practices
+
+<Accordion title="Message formatting">
+  - Keep messages concise and professional
+  - Use attachments for detailed requirements or examples
+  - Include relevant context in initial messages
+</Accordion>
+
+<Accordion title="File attachments">
+  - Upload files to S3 before sending messages
+  - Use descriptive file names
+  - Validate file types and sizes on the client
+  - Document attachment type is automatically set for all uploads
+</Accordion>
+
+<Accordion title="Real-time updates">
+  - Implement polling or WebSocket connections for real-time updates
+  - Refetch conversation data when new messages arrive
+  - Show typing indicators for better UX
+</Accordion>
+
+<Note>
+Conversations are automatically created when users first message each other. You don't need to explicitly create a conversation before sending messages.
+</Note>

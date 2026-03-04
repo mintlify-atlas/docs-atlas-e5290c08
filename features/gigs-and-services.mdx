@@ -1,0 +1,305 @@
+---
+title: Gigs and services
+description: Create, manage, and sell your services through gigs on Khedma Market
+---
+
+Gigs are service listings that freelancers create to offer their skills to clients. Each gig represents a specific service you provide with defined deliverables, pricing, and timelines.
+
+## Understanding gigs
+
+A gig is a packaged service offering that includes:
+
+- Service title and description
+- Pricing tiers (basic, standard, premium)
+- Delivery timeframes
+- Number of revisions included
+- Portfolio images and samples
+
+<Info>
+  Think of a gig as your service storefront - it's how clients discover and purchase your services.
+</Info>
+
+## Creating a gig
+
+Freelancers can create gigs through a step-by-step process:
+
+### Start with a draft
+
+All gigs begin as drafts, allowing you to build them incrementally:
+
+```typescript
+const createDraft = async (userId: string) => {
+  return await db.gig.create({
+    data: {
+      ownerId: userId,
+      status: 'draft'
+    }
+  });
+};
+```
+
+### Step 1: Overview
+
+Define the core details of your service:
+
+**Title**
+Create a clear, descriptive title (e.g., "I will design a modern logo for your business")
+
+**Category**
+Select the primary category and subcategory for your service:
+- Browse available categories
+- Choose the most relevant subcategory
+- This helps clients find your gig in search
+
+**Tags**
+Add up to 5 relevant tags to improve discoverability:
+
+```typescript
+model GigTag {
+  id        String   @id @default(cuid())
+  name      String
+  gigId     String
+  gig       Gig      @relation(fields: [gigId], references: [id])
+}
+```
+
+### Step 2: Pricing and packages
+
+Offer one or multiple pricing tiers:
+
+<CardGroup cols={3}>
+  <Card title="Basic" icon="circle">
+    Entry-level service with core deliverables
+  </Card>
+  <Card title="Standard" icon="circle-half-stroke">
+    Enhanced service with additional features
+  </Card>
+  <Card title="Premium" icon="circle-check">
+    Complete package with all features
+  </Card>
+</CardGroup>
+
+For each package, define:
+
+```typescript
+model Package {
+  id          String      @id @default(cuid())
+  name        String      // Package name
+  price       Float       // Price in MAD
+  description String      // What's included
+  delivery    Int         // Days to delivery
+  revisions   Int         // Number of revisions
+  type        PackageType // basic, standard, premium
+  gigId       String
+  gig         Gig         @relation(fields: [gigId], references: [id])
+}
+```
+
+**Single vs. multiple packages**
+
+Toggle whether you offer multiple tiers:
+- **Single package**: Offer only a basic package
+- **Multiple packages**: Offer basic, standard, and premium options
+
+```typescript
+gig.offersMultiplePackages: boolean
+```
+
+<Note>
+  Offering multiple packages gives clients flexibility and can increase your average order value.
+</Note>
+
+### Step 3: Description and FAQ
+
+**Rich text description**
+
+Write a detailed description of your service using the rich text editor. Include:
+- What you'll deliver
+- Your process and approach
+- Requirements from the client
+- What makes your service unique
+
+```typescript
+model Gig {
+  id          String @id @default(cuid())
+  description Json?  // Rich text content
+  // ...
+}
+```
+
+**Frequently Asked Questions**
+
+Add FAQs to address common client questions:
+
+```typescript
+model GigFaq {
+  id        String   @id @default(cuid())
+  question  String   @db.Text
+  answer    String   @db.Text
+  gigId     String
+  gig       Gig      @relation(fields: [gigId], references: [id])
+}
+```
+
+Example FAQs:
+- "What do you need from me to get started?"
+- "How many revisions are included?"
+- "What file formats will I receive?"
+
+### Step 4: Gallery
+
+Showcase your work with visual assets:
+
+**Images**
+- Upload 3-5 high-quality images
+- Show examples of your previous work
+- Use images that represent the service you're offering
+
+**Videos** (optional)
+- Add video demonstrations
+- Showcase your process
+- Introduce yourself to potential clients
+
+**Documents** (optional)
+- Upload sample deliverables
+- Share case studies
+- Provide additional portfolio items
+
+```typescript
+model Attachement {
+  id     String  @id @default(cuid())
+  name   String
+  url    String
+  type   String  // "image", "video", "document"
+  gigId  String?
+  gig    Gig?    @relation(fields: [gigId], references: [id])
+}
+```
+
+### Step 5: Publish
+
+Once all sections are complete, publish your gig:
+
+1. Review all sections for completeness
+2. Click "Publish Gig"
+3. System generates a unique slug from your title
+4. Gig becomes visible to clients
+
+```typescript
+const publishGig = async (gigId: string) => {
+  const slug = slugify(gig.title, {
+    lower: true,
+    strict: true,
+    trim: true
+  }) + `-${nanoid(5)}`;
+  
+  return await db.gig.update({
+    where: { id: gigId },
+    data: {
+      status: 'published',
+      slug
+    }
+  });
+};
+```
+
+<Info>
+  Your gig URL will be: `khedma-market.com/@username/gig-title-abc12`
+</Info>
+
+## Managing your gigs
+
+After publishing, you can manage your gigs:
+
+### Gig statuses
+
+```typescript
+enum GigStatus {
+  draft       // Not yet published
+  published   // Live and visible
+  paused      // Temporarily unavailable
+  deleted     // Removed from platform
+}
+```
+
+### Edit existing gigs
+
+Update any aspect of your gig at any time:
+- Modify pricing and packages
+- Update description and FAQs
+- Add or remove gallery images
+- Change title and tags
+
+### Pause gigs
+
+Temporarily hide a gig from search:
+- Mark as paused when you're at capacity
+- Gig remains in your profile but isn't bookable
+- Re-activate when you're ready for new orders
+
+### Delete gigs
+
+Permanently remove a gig:
+- Gig is marked as deleted
+- No longer visible to clients
+- Cannot be recovered
+
+<Note>
+  Consider pausing gigs instead of deleting them if you might offer the service again later.
+</Note>
+
+## Gig visibility and SEO
+
+Your gigs are discoverable through:
+
+**Platform search**
+- Clients search by keyword, category, or tags
+- Gig title and description are indexed
+- Higher-rated gigs rank better
+
+**Category browsing**
+- Gigs appear in their selected category
+- Subcategory pages list relevant services
+
+**Your profile**
+- All published gigs appear on your profile
+- Displayed in a grid format with preview images
+
+**Direct links**
+- Share your gig URL directly with potential clients
+- Each gig has a unique, SEO-friendly URL
+
+## Gig analytics
+
+Track your gig performance:
+
+<CardGroup cols={2}>
+  <Card title="Views" icon="eye">
+    See how many people view your gig
+  </Card>
+  <Card title="Orders" icon="cart-shopping">
+    Track orders received for each gig
+  </Card>
+  <Card title="Reviews" icon="star">
+    Monitor ratings and client feedback
+  </Card>
+  <Card title="Revenue" icon="dollar-sign">
+    Analyze earnings per gig
+  </Card>
+</CardGroup>
+
+## Best practices
+
+Optimize your gigs for success:
+
+1. **Use clear, benefit-focused titles**: Tell clients exactly what you'll do for them
+2. **Price competitively**: Research similar services to price appropriately
+3. **Showcase your best work**: Use high-quality portfolio images
+4. **Be specific in descriptions**: Clearly define what's included and what's not
+5. **Set realistic delivery times**: Under-promise and over-deliver
+6. **Respond to inquiries quickly**: Fast responses lead to more conversions
+7. **Update regularly**: Keep your gigs current with new portfolio samples
+
+<Info>
+  Gigs with complete information, professional images, and competitive pricing receive 3x more orders than incomplete listings.
+</Info>

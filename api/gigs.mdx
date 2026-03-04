@@ -1,0 +1,494 @@
+---
+title: Gigs API
+description: Create, manage, and publish freelance service offerings (gigs) with packages, pricing, and media
+---
+
+The Gigs API allows freelancers to create and manage their service offerings on Khedma Market.
+
+## Create draft gig
+
+Create a new draft gig to begin setting up a service offering.
+
+```typescript
+const draft = await trpc.gig.createDraft.mutate();
+```
+
+### Response
+
+<ResponseField name="id" type="string">
+  Unique identifier for the draft gig
+</ResponseField>
+
+<ResponseField name="ownerId" type="string">
+  ID of the user who created the gig
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Gig status (will be "draft")
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Update gig overview
+
+Update the basic information for a gig including title, category, and tags.
+
+```typescript
+const result = await trpc.gig.updateOverview.mutate({
+  id: "gig_id",
+  title: "I will create a professional website",
+  category: "parent_category_id",
+  subCategory: "subcategory_id",
+  tags: [
+    { id: "tag1", text: "web development" },
+    { id: "tag2", text: "react" },
+    { id: "tag3", text: "nextjs" }
+  ]
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Gig ID to update
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Gig title describing the service
+</ParamField>
+
+<ParamField path="category" type="string" required>
+  Parent category ID
+</ParamField>
+
+<ParamField path="subCategory" type="string" required>
+  Subcategory ID for more specific classification
+</ParamField>
+
+<ParamField path="tags" type="array" required>
+  Array of tag objects with id and text properties
+</ParamField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **NOT_FOUND**: Gig not found
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Create or update packages
+
+Create or update pricing packages for a gig (basic, standard, premium).
+
+```typescript
+const packages = await trpc.gig.createPackages.mutate({
+  gigId: "gig_id",
+  basic: {
+    name: "Basic Package",
+    description: "Essential features",
+    price: 500,
+    delivery: 3,
+    revisions: 1
+  },
+  standard: {
+    name: "Standard Package",
+    description: "More features included",
+    price: 1000,
+    delivery: 5,
+    revisions: 2
+  },
+  premium: {
+    name: "Premium Package",
+    description: "All features included",
+    price: 2000,
+    delivery: 7,
+    revisions: 5
+  }
+});
+```
+
+### Input parameters
+
+<ParamField path="gigId" type="string" required>
+  ID of the gig to add packages to
+</ParamField>
+
+<ParamField path="basic" type="object" required>
+  Basic package details (required)
+  
+  - `name`: string (5-20 characters)
+  - `description`: string (5-100 characters)
+  - `price`: number (minimum 10 MAD)
+  - `delivery`: number (days)
+  - `revisions`: number (minimum 1)
+</ParamField>
+
+<ParamField path="standard" type="object">
+  Standard package details (optional)
+  
+  Same structure as basic package
+</ParamField>
+
+<ParamField path="premium" type="object">
+  Premium package details (optional)
+  
+  Same structure as basic package
+</ParamField>
+
+### Response
+
+<ResponseField name="basic" type="object">
+  Created/updated basic package
+</ResponseField>
+
+<ResponseField name="standard" type="object">
+  Created/updated standard package (if provided)
+</ResponseField>
+
+<ResponseField name="premium" type="object">
+  Created/updated premium package (if provided)
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **NOT_FOUND**: Gig not found
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Check if gig offers multiple packages
+
+Check if a gig has multiple pricing packages enabled.
+
+```typescript
+const hasMultiple = await trpc.gig.doesOffersMultiplePackages.query({
+  id: "gig_id"
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Gig ID to check
+</ParamField>
+
+### Response
+
+Returns a boolean indicating whether the gig offers multiple packages.
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Update multiple packages setting
+
+Enable or disable multiple packages for a gig.
+
+```typescript
+const result = await trpc.gig.udpateOffersMultiplePackages.mutate({
+  id: "gig_id",
+  value: true
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Gig ID to update
+</ParamField>
+
+<ParamField path="value" type="boolean" required>
+  Whether to offer multiple packages
+</ParamField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Update description and FAQ
+
+Update the gig description and frequently asked questions.
+
+```typescript
+const result = await trpc.gig.updateDescriptionFaq.mutate({
+  id: "gig_id",
+  description: {
+    blocks: [
+      {
+        type: "paragraph",
+        data: { text: "I will create a professional website..." }
+      }
+    ]
+  },
+  faq: [
+    {
+      question: "What do you need to get started?",
+      answer: "I need your brand guidelines and content"
+    },
+    {
+      question: "Do you provide revisions?",
+      answer: "Yes, revisions are included based on package"
+    }
+  ]
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Gig ID to update
+</ParamField>
+
+<ParamField path="description" type="OutputData" required>
+  Editor.js output data format with blocks
+</ParamField>
+
+<ParamField path="faq" type="array" required>
+  Array of FAQ objects with question and answer strings
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the update was successful
+</ResponseField>
+
+<ResponseField name="description" type="object">
+  Updated description data
+</ResponseField>
+
+<ResponseField name="faq" type="number">
+  Number of FAQs created
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **UNAUTHORIZED**: This gig is not found or you don't own it
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Update gig gallery
+
+Update the media gallery for a gig (images, videos, documents).
+
+```typescript
+const result = await trpc.gig.updateGallery.mutate({
+  id: "gig_id",
+  images: [
+    "https://example.com/image1.jpg",
+    "https://example.com/image2.jpg",
+    "https://example.com/image3.jpg"
+  ],
+  videos: [],
+  documents: []
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Gig ID to update
+</ParamField>
+
+<ParamField path="images" type="array" required>
+  Array of image URLs (at least one required)
+</ParamField>
+
+<ParamField path="videos" type="array">
+  Array of video URLs (optional)
+</ParamField>
+
+<ParamField path="documents" type="array">
+  Array of document URLs (optional)
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the update was successful
+</ResponseField>
+
+<ResponseField name="images" type="array">
+  Array of created attachment objects
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **UNAUTHORIZED**: This gig is not found or you don't own it
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## Publish gig
+
+Publish a draft gig to make it available on the marketplace.
+
+```typescript
+const result = await trpc.gig.publish.mutate({
+  id: "gig_id"
+});
+
+console.log(result.slug); // URL-friendly slug
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Gig ID to publish
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  Gig ID
+</ResponseField>
+
+<ResponseField name="slug" type="string">
+  URL-friendly slug for the gig
+</ResponseField>
+
+<ResponseField name="owner" type="object">
+  Owner information (name and username)
+</ResponseField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **NOT_FOUND**: This gig is not found
+  - **UNPROCESSABLE_CONTENT**: You haven't set a title for your gig yet
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+<Note>
+A gig must have a title before it can be published. The system automatically generates a unique slug based on the title.
+</Note>
+
+---
+
+## Delete gig
+
+Delete a gig permanently.
+
+```typescript
+const result = await trpc.gig.delete.mutate({
+  id: "gig_id"
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  Gig ID to delete
+</ParamField>
+
+### Error handling
+
+<Accordion title="Common errors">
+  - **NOT_FOUND**: This gig is not found
+</Accordion>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+<Warning>
+Deleting a gig is permanent and cannot be undone.
+</Warning>
+
+---
+
+## Get user gigs
+
+Retrieve all gigs for a specific user.
+
+```typescript
+const gigs = await trpc.gig.getUserGigs.query({
+  id: "user_id"
+});
+```
+
+### Input parameters
+
+<ParamField path="id" type="string" required>
+  User ID to get gigs for
+</ParamField>
+
+### Response
+
+Returns an array of gig objects with:
+
+<ResponseField name="id" type="string">
+  Gig ID
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  Gig title
+</ResponseField>
+
+<ResponseField name="slug" type="string">
+  URL slug
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Gig status (draft, published, paused, deleted)
+</ResponseField>
+
+<ResponseField name="category" type="object">
+  Category information
+</ResponseField>
+
+<ResponseField name="packages" type="object">
+  Package information (basic, standard, premium)
+</ResponseField>
+
+<ResponseField name="attachaments" type="object">
+  Media attachments (images, videos, documents)
+</ResponseField>
+
+<ResponseField name="owner" type="object">
+  Owner name and username
+</ResponseField>
+
+<ResponseField name="offersMultiplePackages" type="boolean">
+  Whether multiple packages are offered
+</ResponseField>
+
+<ResponseField name="createdAt" type="Date">
+  Creation timestamp
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)

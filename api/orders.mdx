@@ -1,0 +1,266 @@
+---
+title: Orders API
+description: Process payments and manage orders for gig purchases
+---
+
+The Orders API handles payment processing and order management for gig purchases on Khedma Market.
+
+## Create order
+
+Create a new order with payment information.
+
+```typescript
+const order = await trpc.order.create.mutate({
+  amount: 1000,
+  transactionId: "txn_abc123xyz",
+  orderId: "order_def456",
+  gigId: "gig_123",
+  packageId: "package_456"
+});
+```
+
+### Input parameters
+
+<ParamField path="amount" type="number" required>
+  Order amount in local currency (MAD)
+</ParamField>
+
+<ParamField path="transactionId" type="string" required>
+  Payment gateway transaction identifier
+</ParamField>
+
+<ParamField path="orderId" type="string" required>
+  Unique order identifier
+</ParamField>
+
+<ParamField path="gigId" type="string" required>
+  ID of the gig being purchased
+</ParamField>
+
+<ParamField path="packageId" type="string" required>
+  ID of the selected package (basic, standard, or premium)
+</ParamField>
+
+### Authentication
+
+Requires authentication: **No** (publicProcedure)
+
+<Note>
+This endpoint is currently under development. The implementation handles payment tokenization through YouCan Pay integration.
+</Note>
+
+---
+
+## Payment integration
+
+Khedma Market uses YouCan Pay for payment processing. The payment flow involves:
+
+1. **Tokenization**: Generate a payment token with order details
+2. **Payment**: Process the payment through YouCan Pay
+3. **Order creation**: Create the order after successful payment
+
+### Payment tokenization
+
+The system tokenizes payments using the following parameters:
+
+<ParamField path="amount" type="number">
+  Payment amount
+</ParamField>
+
+<ParamField path="currency" type="string">
+  Currency code (e.g., "MAD" for Moroccan Dirham)
+</ParamField>
+
+<ParamField path="order_id" type="string">
+  Unique order identifier
+</ParamField>
+
+<ParamField path="metadata" type="object">
+  Additional metadata:
+  - `cart.id`: Unique cart identifier (UUID)
+  - `type`: Transaction type (e.g., "checkout")
+</ParamField>
+
+### Token response
+
+```json
+{
+  "token": {
+    "id": "26010885-fb7b-41eb-baf8-3420213f1ed5"
+  }
+}
+```
+
+---
+
+## Order data model
+
+Orders in Khedma Market track the following information:
+
+<ResponseField name="id" type="string">
+  Unique order identifier
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  ID of the user placing the order
+</ResponseField>
+
+<ResponseField name="gigId" type="string">
+  ID of the purchased gig
+</ResponseField>
+
+<ResponseField name="packageId" type="string">
+  ID of the selected package
+</ResponseField>
+
+<ResponseField name="status" type="enum">
+  Order status:
+  - `pending`: Order created, awaiting payment
+  - `processing`: Payment received, work in progress
+  - `completed`: Order fulfilled
+  - `cancelled`: Order cancelled
+</ResponseField>
+
+<ResponseField name="totalAmount" type="number">
+  Total order amount
+</ResponseField>
+
+<ResponseField name="createdAt" type="Date">
+  Order creation timestamp
+</ResponseField>
+
+<ResponseField name="updatedAt" type="Date">
+  Last update timestamp
+</ResponseField>
+
+---
+
+## Payment data model
+
+Payment records contain:
+
+<ResponseField name="id" type="string">
+  Unique payment identifier
+</ResponseField>
+
+<ResponseField name="orderId" type="string">
+  Associated order ID
+</ResponseField>
+
+<ResponseField name="status" type="enum">
+  Payment status:
+  - `pending`: Payment initiated
+  - `success`: Payment completed successfully
+  - `failed`: Payment failed
+</ResponseField>
+
+<ResponseField name="amount" type="number">
+  Payment amount
+</ResponseField>
+
+<ResponseField name="paymentMethod" type="string">
+  Payment method used
+</ResponseField>
+
+<ResponseField name="transactionId" type="string">
+  Payment gateway transaction ID
+</ResponseField>
+
+<ResponseField name="createdAt" type="Date">
+  Payment creation timestamp
+</ResponseField>
+
+<ResponseField name="updatedAt" type="Date">
+  Last update timestamp
+</ResponseField>
+
+---
+
+## Code examples
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    // Create an order after payment
+    async function createOrder(
+      paymentData: {
+        amount: number;
+        transactionId: string;
+        gigId: string;
+        packageId: string;
+      }
+    ) {
+      try {
+        const order = await trpc.order.create.mutate({
+          amount: paymentData.amount,
+          transactionId: paymentData.transactionId,
+          orderId: generateOrderId(),
+          gigId: paymentData.gigId,
+          packageId: paymentData.packageId
+        });
+        
+        console.log('Order created:', order);
+        return order;
+      } catch (error) {
+        console.error('Failed to create order:', error);
+      }
+    }
+
+    function generateOrderId(): string {
+      return `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+    ```
+  </Tab>
+  <Tab title="Payment Flow">
+    ```typescript
+    // Complete payment flow
+    async function purchaseGig(
+      gigId: string,
+      packageId: string,
+      amount: number
+    ) {
+      try {
+        // Step 1: Tokenize payment
+        const tokenData = await tokenizePayment(amount, 'MAD', generateOrderId());
+        
+        if (!tokenData?.token?.id) {
+          throw new Error('Failed to tokenize payment');
+        }
+
+        // Step 2: Process payment with YouCan Pay
+        const transactionId = await processPayment(tokenData.token.id);
+
+        // Step 3: Create order
+        const order = await trpc.order.create.mutate({
+          amount,
+          transactionId,
+          orderId: tokenData.order_id,
+          gigId,
+          packageId
+        });
+
+        return order;
+      } catch (error) {
+        console.error('Purchase failed:', error);
+        throw error;
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Error handling
+
+<Accordion title="Common errors">
+  - **Payment tokenization failed**: Check API credentials and network connection
+  - **Invalid order data**: Ensure all required fields are provided
+  - **Transaction ID missing**: Payment must be completed before order creation
+</Accordion>
+
+<Warning>
+Always validate payment completion before creating an order to prevent discrepancies.
+</Warning>

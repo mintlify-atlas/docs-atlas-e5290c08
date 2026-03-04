@@ -1,0 +1,227 @@
+---
+title: Development setup
+description: Set up your local development environment for Khedma Market
+---
+
+This guide walks you through setting up Khedma Market on your local machine for development.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- Node.js 18.17.0 or higher
+- pnpm 8.6.11 or higher (specified package manager)
+- MySQL 5.7 or higher
+- Git
+
+## Clone the repository
+
+<Steps>
+  <Step title="Clone the project">
+    Clone the repository to your local machine:
+
+    ```bash
+    git clone https://github.com/your-org/khedma-market.git
+    cd khedma-market
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install all project dependencies using pnpm:
+
+    ```bash
+    pnpm install
+    ```
+
+    This will also run the `postinstall` script that generates Prisma Client automatically.
+  </Step>
+</Steps>
+
+## Environment configuration
+
+Set up your environment variables for local development.
+
+<Steps>
+  <Step title="Create environment file">
+    Copy the example environment file:
+
+    ```bash
+    cp .env.example .env
+    ```
+  </Step>
+
+  <Step title="Configure database">
+    Update the `DATABASE_URL` in your `.env` file with your MySQL credentials:
+
+    ```bash
+    DATABASE_URL="mysql://root:password@localhost:3306/khedma-market"
+    ```
+  </Step>
+
+  <Step title="Configure NextAuth">
+    Generate a secret for NextAuth using OpenSSL:
+
+    ```bash
+    openssl rand -base64 32
+    ```
+
+    Add the generated secret to your `.env` file:
+
+    ```bash
+    NEXTAUTH_SECRET="your-generated-secret"
+    NEXTAUTH_URL="http://localhost:3000"
+    ```
+  </Step>
+
+  <Step title="Configure OAuth providers (optional)">
+    If you want to enable GitHub or Google OAuth, add your client credentials:
+
+    ```bash
+    GITHUB_CLIENT_ID="your-github-client-id"
+    GITHUB_CLIENT_SECRET="your-github-client-secret"
+    
+    GOOGLE_CLIENT_ID="your-google-client-id"
+    GOOGLE_CLIENT_SECRET="your-google-client-secret"
+    ```
+  </Step>
+
+  <Step title="Configure email service (optional)">
+    Add Resend API credentials for email verification and password reset:
+
+    ```bash
+    RESEND_API_KEY="your-resend-api-key"
+    FROM_EMAIL="noreply@khedma.market"
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  The application can run without OAuth providers and email service configured, but those features will not be available.
+</Note>
+
+## Database setup
+
+Initialize and seed your database.
+
+<Steps>
+  <Step title="Create database">
+    Create a MySQL database named `khedma-market`:
+
+    ```sql
+    CREATE DATABASE `khedma-market` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    ```
+  </Step>
+
+  <Step title="Push schema to database">
+    Push the Prisma schema to your database:
+
+    ```bash
+    pnpm db:push
+    ```
+
+    This creates all tables and relationships defined in `prisma/schema.prisma`.
+  </Step>
+
+  <Step title="Seed the database (optional)">
+    Populate the database with sample data:
+
+    ```bash
+    pnpm db:seed
+    ```
+  </Step>
+</Steps>
+
+## Run the development server
+
+Start the Next.js development server with Turbopack:
+
+```bash
+pnpm dev
+```
+
+The application will be available at `http://localhost:3000`.
+
+## Available scripts
+
+Here are the most commonly used scripts defined in `package.json`:
+
+<CodeGroup>
+```bash Development
+# Start development server with Turbopack
+pnpm dev
+```
+
+```bash Database
+# Push schema changes to database
+pnpm db:push
+
+# Generate Prisma Client
+pnpm db:generate
+
+# Create and apply migrations
+pnpm db:migrate
+
+# Open Prisma Studio (database GUI)
+pnpm db:studio
+
+# Seed the database
+pnpm db:seed
+```
+
+```bash Build
+# Build for production
+pnpm build
+
+# Start production server
+pnpm start
+
+# Build and preview production
+pnpm preview
+```
+
+```bash Code Quality
+# Run ESLint
+pnpm lint
+```
+</CodeGroup>
+
+## Verify installation
+
+To verify your setup is working correctly:
+
+1. Navigate to `http://localhost:3000` in your browser
+2. You should see the Khedma Market homepage
+3. Try creating an account to test authentication
+4. Check the database using Prisma Studio: `pnpm db:studio`
+
+## Troubleshooting
+
+<Accordion title="Prisma Client errors">
+  If you see Prisma Client errors, regenerate the client:
+
+  ```bash
+  pnpm db:generate
+  ```
+</Accordion>
+
+<Accordion title="Database connection errors">
+  Verify:
+  - MySQL is running
+  - Database credentials in `.env` are correct
+  - Database `khedma-market` exists
+  - User has proper permissions
+</Accordion>
+
+<Accordion title="Port already in use">
+  If port 3000 is already in use, you can specify a different port:
+
+  ```bash
+  PORT=3001 pnpm dev
+  ```
+</Accordion>
+
+## Next steps
+
+- Learn about the [architecture](/development/architecture)
+- Explore the [database schema](/development/database-schema)
+- Understand [authentication](/development/authentication)

@@ -1,0 +1,655 @@
+---
+title: Database schema
+description: Complete overview of the Khedma Market database schema and relationships
+---
+
+Khedma Market uses MySQL as its database with Prisma as the ORM. The schema is defined in `prisma/schema.prisma`.
+
+## Database configuration
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+```
+
+## Core models
+
+### User
+
+The central user model supporting freelancers, clients, companies, and admins.
+
+```prisma
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  firstName     String?   @map("first_name")
+  lastName      String?   @map("last_name")
+  username      String?   @unique
+  email         String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  password      String?   @db.Text
+  role          role?
+
+  // Personal information
+  dob        DateTime? @map("date_of_birth")
+  bio        String?   @db.Text
+  country    String?   @default("Morocco")
+  city       String?
+  address    String?
+  phone      String?
+  website    String?
+  resume     String?   @db.Text
+  profilePic String?   @map("profile_pic")
+
+  // Feature flags
+  isTwoFactorEnabled        Boolean @default(false) @map("is_two_factor_enabled")
+  inboxNotifications        Boolean @default(true)  @map("inbox_notifications")
+  orderUpdatesNotifications Boolean @default(true)  @map("order_updates_notifications")
+
+  // Freelancer profile
+  description String?   @db.Text
+  
+  // Relations
+  languages               UserLanguages[]
+  education               Education[]
+  certifications          Certification[]
+  skills                  Skill[]
+  sessions                Session[]
+  accounts                Account[]
+  twoFactorConfirmation   TwoFactorConfirmation?
+  conversationsAsSender   Conversation[] @relation("SenderToConversation")
+  conversationsAsReceiver Conversation[] @relation("ReceiverToConversation")
+  messages                Message[]
+  attachements            Attachement[]
+  gigs                    Gig[]
+  reviews                 Review[]
+  orders                  Order[]
+  projects                Project[]
+  applications            Application[]
+  companies               Company[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+```
+
+<Accordion title="User roles">
+  The `role` enum defines four user types:
+
+  ```prisma
+  enum role {
+    client
+    freelancer
+    company
+    admin
+  }
+  ```
+
+  - **client**: Can post jobs and order gigs
+  - **freelancer**: Can create gigs and apply to jobs
+  - **company**: Can post jobs and manage company profile
+  - **admin**: Platform administration access
+</Accordion>
+
+## Authentication models
+
+NextAuth.js requires several models for authentication:
+
+<CodeGroup>
+```prisma Account
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+```
+
+```prisma Session
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+```
+
+```prisma Verification Token
+model VerificationToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+  @@map("verification_tokens")
+}
+```
+
+```prisma Password Reset
+model PasswordResetToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+  @@map("password_reset_tokens")
+}
+```
+</CodeGroup>
+
+### Two-factor authentication
+
+```prisma
+model TwoFactorToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+  @@map("two_factor_tokens")
+}
+
+model TwoFactorConfirmation {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@map("two_factor_confirmations")
+}
+```
+
+## Freelancer profile models
+
+### Languages
+
+```prisma
+model Language {
+  id         String          @id @default(cuid())
+  name       String
+  nativeName String?         @map("native_name")
+  value      String          @unique
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+  users      UserLanguages[]
+
+  @@map("languages")
+}
+
+model UserLanguages {
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+  languageId String   @map("language_id")
+  language   Language @relation(fields: [languageId], references: [id])
+  level      String
+
+  @@id([userId, languageId])
+  @@map("user_languages")
+}
+```
+
+### Education
+
+```prisma
+model Education {
+  id               String   @id @default(cuid())
+  country          String
+  universityName   String   @map("university_name")
+  title            String
+  major            String
+  yearOfGraduation DateTime @map("year_of_graduation")
+  user             User?    @relation(fields: [userId], references: [id])
+  userId           String?  @map("user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("education")
+}
+```
+
+### Certifications
+
+```prisma
+model Certification {
+  id            String   @id @default(cuid())
+  name          String
+  certifiedFrom String   @map("certified_from")
+  user          User?    @relation(fields: [userId], references: [id])
+  userId        String?  @map("user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("certifications")
+}
+```
+
+### Skills
+
+```prisma
+model Skill {
+  id     String      @id @default(cuid())
+  name   String
+  value  String
+  status SkillStatus @default(active)
+  level  String
+  userId String?     @map("user_id")
+  user   User?       @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("skills")
+}
+
+enum SkillStatus {
+  active
+  inactive
+}
+```
+
+### Projects
+
+```prisma
+model Project {
+  id          String        @id @default(cuid())
+  title       String        @db.VarChar(255)
+  description String        @db.Text
+  status      ProjectStatus @default(draft)
+  gallery     Attachement[]
+  user        User?         @relation(fields: [userId], references: [id])
+  userId      String?       @map("user_id")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  draft
+  published
+}
+```
+
+## Gig marketplace models
+
+### Gig
+
+Core service listing model:
+
+```prisma
+model Gig {
+  id                     String    @id @default(cuid())
+  title                  String?
+  slug                   String?
+  description            Json?
+  isPaused               Boolean   @default(false) @map("is_paused")
+  status                 GigStatus @default(draft)
+  offersMultiplePackages Boolean   @default(false) @map("offers_multiple_packages")
+  ownerId                String    @map("owner_id")
+  categoryId             String?   @map("category_id")
+  packages               Package[]
+  category               Category? @relation(fields: [categoryId], references: [id])
+  owner                  User      @relation(fields: [ownerId], references: [id])
+  attachments            Attachement[]
+  reviews                Review[]
+  tags                   GigTag[]
+  faqs                   GigFaq[]
+  orders                 Order[]
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  @@map("gigs")
+}
+
+enum GigStatus {
+  draft
+  published
+  paused
+  deleted
+}
+```
+
+### Package
+
+Pricing tiers for gigs:
+
+```prisma
+model Package {
+  id          String      @id @default(cuid())
+  name        String
+  price       Float
+  description String
+  delivery    Int
+  revisions   Int
+  type        PackageType
+  gig         Gig?        @relation(fields: [gigId], references: [id])
+  gigId       String?     @map("gig_id")
+  orders      Order[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@unique([gigId, type])
+  @@map("packages")
+}
+
+enum PackageType {
+  basic
+  standard
+  premium
+}
+```
+
+### Category
+
+Hierarchical category structure:
+
+```prisma
+model Category {
+  id             String     @id @default(cuid())
+  name           String
+  slug           String     @unique
+  parentCategory Category?  @relation(name: "CategoryRelation", fields: [parentId], references: [id])
+  subCategories  Category[] @relation(name: "CategoryRelation")
+  parentId       String?    @map("parent_id")
+  gigs           Gig[]
+
+  @@map("categories")
+}
+```
+
+### Supporting models
+
+<CodeGroup>
+```prisma Tags
+model GigTag {
+  id     String   @id @default(cuid())
+  name   String
+  gig    Gig?     @relation(fields: [gigId], references: [id])
+  gigId  String?  @map("gig_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("gig_tags")
+}
+```
+
+```prisma FAQs
+model GigFaq {
+  id       String   @id @default(cuid())
+  question String   @db.Text
+  answer   String   @db.Text
+  gig      Gig?     @relation(fields: [gigId], references: [id])
+  gigId    String?  @map("gig_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("gig_faqs")
+}
+```
+
+```prisma Reviews
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int
+  comment   String
+  gig       Gig?     @relation(fields: [gigId], references: [id])
+  gigId     String?  @map("gig_id")
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?  @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+```
+</CodeGroup>
+
+## Orders and payments
+
+### Order
+
+```prisma
+model Order {
+  id          String      @id @default(cuid())
+  userId      String      @map("user_id")
+  gigId       String      @map("gig_id")
+  packageId   String      @map("package_id")
+  status      OrderStatus @default(pending)
+  totalAmount Float       @map("total_amount")
+  user        User        @relation(fields: [userId], references: [id])
+  package     Package     @relation(fields: [packageId], references: [id])
+  gig         Gig         @relation(fields: [gigId], references: [id])
+  payment     Payment?
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  pending
+  processing
+  completed
+  cancelled
+}
+```
+
+### Payment
+
+```prisma
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String        @unique @map("order_id")
+  status        PaymentStatus @default(pending)
+  amount        Float
+  paymentMethod String        @map("payment_method")
+  transactionId String?       @map("transaction_id")
+  order         Order         @relation(fields: [orderId], references: [id])
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+}
+```
+
+## Messaging system
+
+### Conversation
+
+```prisma
+model Conversation {
+  id         String    @id @default(cuid())
+  senderId   String    @map("sender_id")
+  receiverId String    @map("receiver_id")
+  sender     User      @relation("SenderToConversation", fields: [senderId], references: [id])
+  receiver   User      @relation("ReceiverToConversation", fields: [receiverId], references: [id])
+  messages   Message[]
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@map("conversations")
+}
+```
+
+### Message
+
+```prisma
+model Message {
+  id             String        @id @default(cuid())
+  content        String        @db.Text
+  conversationId String        @map("conversation_id")
+  userId         String        @map("user_id")
+  user           User          @relation(fields: [userId], references: [id])
+  conversation   Conversation  @relation(fields: [conversationId], references: [id])
+  attachements   Attachement[]
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@map("messages")
+}
+```
+
+### Attachement
+
+```prisma
+model Attachement {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  type      String
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id])
+  messageId String?  @map("message_id")
+  message   Message? @relation(fields: [messageId], references: [id])
+  gigId     String?  @map("gig_id")
+  gig       Gig?     @relation(fields: [gigId], references: [id])
+  projectId String?  @map("project_id")
+  project   Project? @relation(fields: [projectId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("attachements")
+}
+```
+
+## Job marketplace models
+
+### Company
+
+```prisma
+model Company {
+  id           String   @id @default(cuid())
+  name         String
+  logo         String   @db.Text
+  industry     String
+  location     String
+  description  String   @db.Text
+  contactEmail String   @map("contact_email")
+  website      String?
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id])
+  jobs         Job[]
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+}
+```
+
+### Job
+
+```prisma
+model Job {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  title        String
+  description  Json
+  location     String
+  salary       String?
+  canBeRemote  Boolean       @map("can_be_remote")
+  type         JobType
+  companyId    String        @map("company_id")
+  company      Company       @relation(fields: [companyId], references: [id])
+  applications Application[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+}
+
+enum JobType {
+  full_time
+  part_time
+  contract
+  intern
+}
+```
+
+### Application
+
+```prisma
+model Application {
+  id          String   @id @default(cuid())
+  jobId       String   @map("job_id")
+  userId      String   @map("user_id")
+  coverLetter String   @map("cover_letter") @db.Text
+  applicant   User     @relation(fields: [userId], references: [id])
+  job         Job      @relation(fields: [jobId], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+}
+```
+
+## Relationships diagram
+
+Key relationships in the schema:
+
+- **User** → One-to-many → Gigs (as owner)
+- **User** → One-to-many → Orders (as buyer)
+- **User** → Many-to-many → Languages (through UserLanguages)
+- **Gig** → One-to-many → Packages
+- **Gig** → Many-to-one → Category
+- **Order** → Many-to-one → User, Gig, Package
+- **Order** → One-to-one → Payment
+- **Conversation** → Many-to-one → User (sender and receiver)
+- **Message** → Many-to-one → Conversation, User
+
+<Note>
+  All relations use `onDelete: Cascade` where appropriate to maintain referential integrity.
+</Note>
+
+## Database commands
+
+<CodeGroup>
+```bash Push schema
+# Push schema changes without migrations
+pnpm db:push
+```
+
+```bash Migrations
+# Create and apply a new migration
+pnpm db:migrate
+```
+
+```bash Studio
+# Open Prisma Studio to browse data
+pnpm db:studio
+```
+
+```bash Generate
+# Regenerate Prisma Client
+pnpm db:generate
+```
+</CodeGroup>
+
+## Next steps
+
+- Learn about [authentication](/development/authentication)
+- Review the [architecture](/development/architecture)
+- Start [building features](/guides/creating-a-gig)

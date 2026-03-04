@@ -1,0 +1,355 @@
+---
+title: Files API
+description: Generate signed URLs for secure file uploads to AWS S3
+---
+
+The Files API provides secure file upload functionality through pre-signed S3 URLs.
+
+## Generate upload URL
+
+Generate a pre-signed URL for uploading a file to AWS S3.
+
+```typescript
+const { url, key } = await trpc.file.generateUrl.mutate({
+  filename: "portfolio-image.jpg",
+  filetype: "image/jpeg"
+});
+
+// Upload the file
+await fetch(url, {
+  method: 'PUT',
+  body: file,
+  headers: {
+    'Content-Type': 'image/jpeg'
+  }
+});
+
+// File is now available at:
+// https://your-bucket.s3.amazonaws.com/{key}
+```
+
+### Input parameters
+
+<ParamField path="filename" type="string" required>
+  Original filename including extension (e.g., "document.pdf", "image.jpg")
+</ParamField>
+
+<ParamField path="filetype" type="string" required>
+  MIME type of the file (e.g., "image/jpeg", "application/pdf", "video/mp4")
+</ParamField>
+
+### Response
+
+<ResponseField name="url" type="string">
+  Pre-signed S3 URL for uploading the file (valid for 120 seconds)
+</ResponseField>
+
+<ResponseField name="key" type="string">
+  S3 object key where the file will be stored
+  
+  Format: `{uuid}/{filename}`
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **Yes** (protectedProcedure)
+
+---
+
+## File upload flow
+
+The complete file upload process:
+
+1. **Request signed URL** from the API with filename and filetype
+2. **Upload file** directly to S3 using the signed URL
+3. **Construct public URL** using the returned key
+4. **Store URL** in your database or use in API calls
+
+### Step-by-step example
+
+```typescript
+import { trpc } from '@/lib/trpc';
+
+async function uploadFile(file: File): Promise<string> {
+  // Step 1: Generate signed URL
+  const { url, key } = await trpc.file.generateUrl.mutate({
+    filename: file.name,
+    filetype: file.type
+  });
+
+  // Step 2: Upload to S3
+  const uploadResponse = await fetch(url, {
+    method: 'PUT',
+    body: file,
+    headers: {
+      'Content-Type': file.type
+    }
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error('Failed to upload file');
+  }
+
+  // Step 3: Construct public URL
+  const publicUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.amazonaws.com/${key}`;
+  
+  return publicUrl;
+}
+```
+
+---
+
+## Supported file types
+
+### Images
+
+<CodeGroup>
+```typescript Supported types
+const imageTypes = [
+  'image/jpeg',
+  'image/jpg', 
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml'
+];
+```
+</CodeGroup>
+
+### Videos
+
+<CodeGroup>
+```typescript Supported types
+const videoTypes = [
+  'video/mp4',
+  'video/mpeg',
+  'video/quicktime',
+  'video/webm'
+];
+```
+</CodeGroup>
+
+### Documents
+
+<CodeGroup>
+```typescript Supported types
+const documentTypes = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain'
+];
+```
+</CodeGroup>
+
+---
+
+## Code examples
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    // Upload a single file
+    async function uploadSingleFile(file: File): Promise<string> {
+      try {
+        const { url, key } = await trpc.file.generateUrl.mutate({
+          filename: file.name,
+          filetype: file.type
+        });
+
+        const response = await fetch(url, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type }
+        });
+
+        if (!response.ok) {
+          throw new Error('Upload failed');
+        }
+
+        const bucketName = process.env.NEXT_PUBLIC_AWS_BUCKET_NAME;
+        return `https://${bucketName}.s3.amazonaws.com/${key}`;
+      } catch (error) {
+        console.error('Failed to upload file:', error);
+        throw error;
+      }
+    }
+
+    // Upload multiple files
+    async function uploadMultipleFiles(files: File[]): Promise<string[]> {
+      const uploadPromises = files.map(file => uploadSingleFile(file));
+      return Promise.all(uploadPromises);
+    }
+    ```
+  </Tab>
+  <Tab title="React Hook">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+    import { useState } from 'react';
+
+    function FileUploader() {
+      const [uploading, setUploading] = useState(false);
+      const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
+      
+      const generateUrlMutation = trpc.file.generateUrl.useMutation();
+
+      const handleFileUpload = async (file: File) => {
+        setUploading(true);
+        try {
+          // Generate signed URL
+          const { url, key } = await generateUrlMutation.mutateAsync({
+            filename: file.name,
+            filetype: file.type
+          });
+
+          // Upload file
+          const response = await fetch(url, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type }
+          });
+
+          if (response.ok) {
+            const publicUrl = `https://${process.env.NEXT_PUBLIC_AWS_BUCKET_NAME}.s3.amazonaws.com/${key}`;
+            setUploadedUrl(publicUrl);
+          }
+        } catch (error) {
+          console.error('Upload failed:', error);
+        } finally {
+          setUploading(false);
+        }
+      };
+
+      return (
+        <div>
+          <input
+            type="file"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFileUpload(file);
+            }}
+            disabled={uploading}
+          />
+          {uploading && <p>Uploading...</p>}
+          {uploadedUrl && <p>Uploaded: {uploadedUrl}</p>}
+        </div>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="With Progress">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    async function uploadWithProgress(
+      file: File,
+      onProgress: (percent: number) => void
+    ): Promise<string> {
+      // Generate signed URL
+      const { url, key } = await trpc.file.generateUrl.mutate({
+        filename: file.name,
+        filetype: file.type
+      });
+
+      // Upload with progress tracking
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = (e.loaded / e.total) * 100;
+            onProgress(percent);
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200) {
+            const publicUrl = `https://${process.env.NEXT_PUBLIC_AWS_BUCKET_NAME}.s3.amazonaws.com/${key}`;
+            resolve(publicUrl);
+          } else {
+            reject(new Error('Upload failed'));
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Upload failed'));
+        });
+
+        xhr.open('PUT', url);
+        xhr.setRequestHeader('Content-Type', file.type);
+        xhr.send(file);
+      });
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## S3 configuration
+
+The Files API uses AWS S3 with the following configuration:
+
+<ParamField path="AWS_REGION" type="string">
+  AWS region where the S3 bucket is located
+</ParamField>
+
+<ParamField path="AWS_BUCKET_NAME" type="string">
+  Name of the S3 bucket for file storage
+</ParamField>
+
+<ParamField path="AWS_ACCESS_KEY_ID" type="string">
+  AWS access key ID with S3 permissions
+</ParamField>
+
+<ParamField path="AWS_SECRET_ACCESS_KEY" type="string">
+  AWS secret access key
+</ParamField>
+
+### Signed URL expiration
+
+Pre-signed URLs are valid for **120 seconds** (2 minutes). Upload must be completed within this timeframe.
+
+---
+
+## Best practices
+
+<Accordion title="File validation">
+  - Validate file types on the client before upload
+  - Check file sizes to prevent uploading very large files
+  - Sanitize filenames to avoid special characters
+  - Show upload progress to users
+</Accordion>
+
+<Accordion title="Error handling">
+  - Handle expired signed URLs (generate new URL if needed)
+  - Retry failed uploads with exponential backoff
+  - Provide clear error messages to users
+  - Log upload failures for debugging
+</Accordion>
+
+<Accordion title="Security">
+  - Never expose AWS credentials in client-side code
+  - Use signed URLs for all uploads
+  - Validate file types on the server side as well
+  - Set appropriate CORS policies on your S3 bucket
+</Accordion>
+
+<Accordion title="Performance">
+  - Compress images before upload when possible
+  - Use parallel uploads for multiple files
+  - Show upload progress for better UX
+  - Consider using multipart uploads for large files
+</Accordion>
+
+<Warning>
+Signed URLs expire after 120 seconds. Ensure uploads complete within this timeframe or request a new URL.
+</Warning>
+
+<Note>
+Files are stored with a UUID prefix to prevent naming conflicts and organize uploads by user.
+</Note>

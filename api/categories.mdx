@@ -1,0 +1,283 @@
+---
+title: Categories API
+description: Browse service categories and subcategories for organizing gigs
+---
+
+The Categories API provides access to the hierarchical category structure used to organize gigs on Khedma Market.
+
+## Get categories
+
+Retrieve all top-level categories.
+
+```typescript
+const categories = await trpc.category.getCategories.query();
+```
+
+### Response
+
+Returns an array of category objects:
+
+<ResponseField name="id" type="string">
+  Unique category identifier
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Category display name
+</ResponseField>
+
+<ResponseField name="slug" type="string">
+  URL-friendly category identifier
+</ResponseField>
+
+<ResponseField name="parentId" type="string">
+  ID of parent category (null for top-level categories)
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **No** (publicProcedure)
+
+---
+
+## Get subcategories
+
+Retrieve all subcategories for a specific parent category.
+
+```typescript
+const subcategories = await trpc.category.getSubCategories.query({
+  parentId: "category_id"
+});
+```
+
+### Input parameters
+
+<ParamField path="parentId" type="string" required>
+  ID of the parent category
+</ParamField>
+
+### Response
+
+Returns an array of subcategory objects with the same structure as categories, plus:
+
+<ResponseField name="subCategories" type="array">
+  Nested array of child categories (if any)
+</ResponseField>
+
+### Authentication
+
+Requires authentication: **No** (publicProcedure)
+
+---
+
+## Category hierarchy
+
+Categories on Khedma Market are organized hierarchically:
+
+```
+Top-level Category
+├── Subcategory 1
+│   ├── Sub-subcategory 1.1
+│   └── Sub-subcategory 1.2
+└── Subcategory 2
+    ├── Sub-subcategory 2.1
+    └── Sub-subcategory 2.2
+```
+
+### Example categories
+
+Common category structures include:
+
+- **Graphics & Design**
+  - Logo Design
+  - Brand Identity
+  - Web Design
+  - Illustration
+
+- **Programming & Tech**
+  - Web Development
+  - Mobile Development
+  - Desktop Applications
+  - Game Development
+
+- **Digital Marketing**
+  - Social Media Marketing
+  - SEO
+  - Content Marketing
+  - Email Marketing
+
+- **Writing & Translation**
+  - Content Writing
+  - Copywriting
+  - Translation
+  - Proofreading
+
+---
+
+## Code examples
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    // Get all categories
+    async function getAllCategories() {
+      try {
+        const categories = await trpc.category.getCategories.query();
+        console.log('Categories:', categories.length);
+        return categories;
+      } catch (error) {
+        console.error('Failed to fetch categories:', error);
+      }
+    }
+
+    // Get subcategories for a category
+    async function getSubcategories(parentId: string) {
+      try {
+        const subcategories = await trpc.category.getSubCategories.query({
+          parentId
+        });
+        console.log('Subcategories:', subcategories.length);
+        return subcategories;
+      } catch (error) {
+        console.error('Failed to fetch subcategories:', error);
+      }
+    }
+
+    // Build complete category tree
+    async function buildCategoryTree() {
+      const topLevelCategories = await trpc.category.getCategories.query();
+      
+      const tree = await Promise.all(
+        topLevelCategories.map(async (category) => {
+          const subcategories = await trpc.category.getSubCategories.query({
+            parentId: category.id
+          });
+          
+          return {
+            ...category,
+            subcategories
+          };
+        })
+      );
+      
+      return tree;
+    }
+    ```
+  </Tab>
+  <Tab title="React Component">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+    import { useState } from 'react';
+
+    function CategorySelector() {
+      const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+      
+      const { data: categories } = trpc.category.getCategories.useQuery();
+      
+      const { data: subcategories } = trpc.category.getSubCategories.useQuery(
+        { parentId: selectedCategory! },
+        { enabled: !!selectedCategory }
+      );
+
+      return (
+        <div>
+          <select onChange={(e) => setSelectedCategory(e.target.value)}>
+            <option value="">Select a category</option>
+            {categories?.map(cat => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+
+          {subcategories && subcategories.length > 0 && (
+            <select>
+              <option value="">Select a subcategory</option>
+              {subcategories.map(subcat => (
+                <option key={subcat.id} value={subcat.id}>
+                  {subcat.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="Navigation">
+    ```typescript
+    import { trpc } from '@/lib/trpc';
+
+    function CategoryNavigation() {
+      const { data: categories } = trpc.category.getCategories.useQuery();
+      const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+      
+      const { data: subcategories } = trpc.category.getSubCategories.useQuery(
+        { parentId: expandedCategory! },
+        { enabled: !!expandedCategory }
+      );
+
+      const handleCategoryClick = (categoryId: string) => {
+        setExpandedCategory(
+          expandedCategory === categoryId ? null : categoryId
+        );
+      };
+
+      return (
+        <nav>
+          {categories?.map(category => (
+            <div key={category.id}>
+              <button onClick={() => handleCategoryClick(category.id)}>
+                {category.name}
+              </button>
+              
+              {expandedCategory === category.id && subcategories && (
+                <ul>
+                  {subcategories.map(subcat => (
+                    <li key={subcat.id}>
+                      <a href={`/category/${subcat.slug}`}>
+                        {subcat.name}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </nav>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Best practices
+
+<Accordion title="Category selection">
+  - Always start with top-level categories
+  - Load subcategories on demand to improve performance
+  - Cache category data as it rarely changes
+  - Provide search functionality for large category lists
+</Accordion>
+
+<Accordion title="User experience">
+  - Show category hierarchy breadcrumbs
+  - Allow users to browse and filter by category
+  - Display popular categories prominently
+  - Enable category-based search
+</Accordion>
+
+<Accordion title="Performance">
+  - Cache category data in local storage
+  - Load subcategories lazily
+  - Prefetch commonly accessed categories
+  - Use category slugs in URLs for SEO
+</Accordion>
+
+<Note>
+Categories are managed by administrators. Users can browse and select from existing categories but cannot create new ones.
+</Note>

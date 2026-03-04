@@ -1,0 +1,299 @@
+---
+title: Getting started
+description: Learn how to set up and run Khedma Market locally on your development machine
+---
+
+Khedma Market is a freelancing platform built specifically for Moroccan professionals. This guide will walk you through setting up your local development environment.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed on your system:
+
+- **Node.js** (v18 or higher)
+- **pnpm** (v8.6.11 or higher) - Package manager
+- **MySQL** (v8.0 or higher) - Database server
+- **Git** - Version control
+
+<Note>
+Khedma Market uses pnpm as its package manager. If you don't have it installed, run `npm install -g pnpm@8.6.11`.
+</Note>
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    Start by cloning the Khedma Market repository to your local machine:
+
+    ```bash
+    git clone https://github.com/your-org/khedma-market.git
+    cd khedma-market
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install all required dependencies using pnpm:
+
+    ```bash
+    pnpm install
+    ```
+
+    This will install all packages defined in `package.json` including Next.js, Prisma, NextAuth, tRPC, and all UI components.
+  </Step>
+
+  <Step title="Set up environment variables">
+    Create a `.env` file in the root directory by copying the example file:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Configure the following required environment variables:
+
+    <CodeGroup>
+    ```bash Database
+    # MySQL database connection string
+    DATABASE_URL="mysql://root:password@localhost:3306/khedma-market"
+    ```
+
+    ```bash Authentication
+    # NextAuth configuration
+    NEXTAUTH_SECRET="your-secret-key-here"
+    NEXTAUTH_URL="http://localhost:3000"
+
+    # Generate a secret with: openssl rand -base64 32
+    ```
+
+    ```bash OAuth Providers
+    # GitHub OAuth
+    GITHUB_CLIENT_ID="your-github-client-id"
+    GITHUB_CLIENT_SECRET="your-github-client-secret"
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID="your-google-client-id"
+    GOOGLE_CLIENT_SECRET="your-google-client-secret"
+    ```
+
+    ```bash Email Service
+    # Resend API for email verification
+    RESEND_API_KEY="your-resend-api-key"
+    FROM_EMAIL="noreply@khedma.market"
+    ```
+
+    ```bash AWS S3 Storage
+    # AWS S3 for file uploads
+    AWS_ACCESS_KEY_ID="your-aws-access-key"
+    AWS_SECRET_ACCESS_KEY="your-aws-secret-key"
+    AWS_REGION="us-east-1"
+    AWS_BUCKET_NAME="khedma-market-uploads"
+    ```
+
+    ```bash WebSocket
+    # Socket.io for real-time messaging
+    NEXT_PUBLIC_SOCKET_URL="http://localhost:3001"
+    ```
+    </CodeGroup>
+
+    <Warning>
+    Never commit your `.env` file to version control. The `.env.example` file is provided as a template only.
+    </Warning>
+  </Step>
+
+  <Step title="Set up the database">
+    Create your MySQL database and run Prisma migrations:
+
+    ```bash
+    # Generate Prisma client
+    pnpm db:generate
+
+    # Push the schema to your database
+    pnpm db:push
+
+    # Optional: Seed the database with sample data
+    pnpm db:seed
+    ```
+
+    <Note>
+    Use `pnpm db:studio` to open Prisma Studio and visually browse your database.
+    </Note>
+  </Step>
+
+  <Step title="Start the development server">
+    Launch the Next.js development server:
+
+    ```bash
+    pnpm dev
+    ```
+
+    Your application will be available at `http://localhost:3000`.
+  </Step>
+</Steps>
+
+## Authentication setup
+
+Khedma Market supports multiple authentication methods:
+
+### Credentials authentication
+
+Users can register with email and password. The system includes:
+
+- Email verification via Resend
+- Password hashing with bcrypt
+- Two-factor authentication (optional)
+
+```typescript src/server/auth.ts
+// Credentials provider configuration
+Credentials({
+  async authorize(credentials) {
+    const validatedFields = LoginSchema.safeParse(credentials);
+    if (validatedFields.success) {
+      const { email, password } = validatedFields.data;
+      
+      const user = await getUserByEmail(email);
+      if (!user || !user.password) return null;
+      
+      const passwordsMatch = await bcrypt.compare(password, user.password);
+      if (passwordsMatch) return user;
+    }
+    return null;
+  },
+})
+```
+
+### OAuth providers
+
+Configure GitHub and Google OAuth by creating OAuth apps:
+
+**GitHub:**
+1. Go to GitHub Settings > Developer settings > OAuth Apps
+2. Create a new OAuth App
+3. Set callback URL to `http://localhost:3000/api/auth/callback/github`
+4. Copy Client ID and Secret to your `.env` file
+
+**Google:**
+1. Go to Google Cloud Console
+2. Create OAuth 2.0 credentials
+3. Set callback URL to `http://localhost:3000/api/auth/callback/google`
+4. Copy Client ID and Secret to your `.env` file
+
+### User roles
+
+The platform supports four user roles defined in the Prisma schema:
+
+<CodeGroup>
+```prisma schema.prisma
+enum role {
+  client      // Can hire freelancers and post jobs
+  freelancer  // Can create gigs and offer services
+  company     // Can post job listings
+  admin       // Full platform access
+}
+```
+
+```typescript User type
+type ExtendedUser = {
+  id: string;
+  role: 'client' | 'freelancer' | 'company' | 'admin';
+  username: string;
+  email: string;
+  isTwoFactorEnabled: boolean;
+  isOAuth: boolean;
+}
+```
+</CodeGroup>
+
+## Available scripts
+
+Here are the main commands you'll use during development:
+
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start development server with Turbopack |
+| `pnpm build` | Build production bundle |
+| `pnpm start` | Start production server |
+| `pnpm preview` | Build and preview production locally |
+| `pnpm lint` | Run ESLint checks |
+| `pnpm db:push` | Push schema changes to database |
+| `pnpm db:migrate` | Create and run migrations |
+| `pnpm db:studio` | Open Prisma Studio |
+| `pnpm db:seed` | Seed database with sample data |
+
+## Project structure
+
+```
+khedma-market/
+├── prisma/
+│   └── schema.prisma          # Database schema
+├── src/
+│   ├── app/                   # Next.js app directory
+│   ├── components/            # React components
+│   ├── server/
+│   │   ├── auth.ts           # NextAuth configuration
+│   │   └── db.ts             # Prisma client
+│   ├── lib/                   # Utility functions
+│   ├── schemas/               # Zod validation schemas
+│   ├── actions/               # Server actions
+│   └── env.js                 # Environment validation
+├── public/                    # Static assets
+└── package.json
+```
+
+## Next steps
+
+Now that you have Khedma Market running locally, explore these guides:
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/development/authentication">
+    Learn about the authentication system and user management
+  </Card>
+  <Card title="Database schema" icon="database" href="/development/database-schema">
+    Understand the data models and relationships
+  </Card>
+  <Card title="API overview" icon="code" href="/api/overview">
+    Explore the available API endpoints
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/development/architecture">
+    Learn about the project architecture and structure
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Database connection issues
+
+If you're having trouble connecting to MySQL:
+
+```bash
+# Check if MySQL is running
+sudo systemctl status mysql
+
+# Start MySQL service
+sudo systemctl start mysql
+
+# Verify connection
+mysql -u root -p
+```
+
+### Port already in use
+
+If port 3000 is already in use, you can specify a different port:
+
+```bash
+PORT=3001 pnpm dev
+```
+
+### Prisma client errors
+
+If you encounter Prisma client errors after schema changes:
+
+```bash
+# Regenerate Prisma client
+pnpm db:generate
+
+# Clear node_modules and reinstall
+rm -rf node_modules .next
+pnpm install
+```
+
+<Note>
+For more help, check the [GitHub Issues](https://github.com/your-org/khedma-market/issues) or join our community Discord.
+</Note>

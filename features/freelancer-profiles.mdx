@@ -1,0 +1,215 @@
+---
+title: Freelancer profiles
+description: Learn how freelancers create and manage their professional profiles on Khedma Market
+---
+
+Freelancer profiles are the foundation of your professional presence on Khedma Market. A complete profile helps you attract clients and showcase your expertise.
+
+## Profile structure
+
+Your profile consists of several key sections that work together to present your professional identity:
+
+<CardGroup cols={2}>
+  <Card title="Personal information" icon="user">
+    Basic details including name, username, location, and profile picture
+  </Card>
+  <Card title="Professional bio" icon="file-lines">
+    Your description, skills, and areas of expertise
+  </Card>
+  <Card title="Portfolio" icon="briefcase">
+    Showcase your best work through project galleries
+  </Card>
+  <Card title="Credentials" icon="certificate">
+    Education, certifications, and language proficiency
+  </Card>
+</CardGroup>
+
+## Setting up your profile
+
+Complete your profile by filling out all sections to increase your visibility and credibility.
+
+### Add personal details
+
+Navigate to your profile settings to add or edit:
+
+- **Profile picture**: Upload a professional photo
+- **Username**: Choose a unique identifier
+- **Location**: Set your country and city
+- **Contact information**: Add phone number, email, and website
+- **Bio**: Write a brief introduction about yourself
+
+<Info>
+  Your username becomes part of your profile URL: `khedma-market.com/@username`
+</Info>
+
+### Build your professional profile
+
+Enhance your profile with professional details:
+
+**Description**
+
+Write a compelling description that highlights:
+- Your main services and expertise
+- Years of experience
+- What makes you unique
+- Your working style
+
+**Skills**
+
+Add relevant skills with proficiency levels:
+
+```typescript
+model Skill {
+  id     String      @id @default(cuid())
+  name   String
+  value  String
+  status SkillStatus @default(active)
+  level  String      // beginner, intermediate, expert
+  userId String
+  user   User        @relation(fields: [userId], references: [id])
+}
+```
+
+**Languages**
+
+Indicate the languages you speak and your proficiency level:
+
+```typescript
+model UserLanguages {
+  userId     String
+  languageId String
+  level      String  // basic, conversational, fluent, native
+  user       User     @relation(fields: [userId], references: [id])
+  language   Language @relation(fields: [languageId], references: [id])
+}
+```
+
+### Add education and certifications
+
+**Education**
+
+Add your academic background:
+
+- University name
+- Degree title and major
+- Country of institution
+- Year of graduation
+
+**Certifications**
+
+Showcase professional certifications:
+
+- Certificate name
+- Issuing organization
+- Date received
+
+<Note>
+  Adding education and certifications helps build trust with potential clients and demonstrates your qualifications.
+</Note>
+
+## Portfolio projects
+
+Create a portfolio to showcase your work:
+
+### Creating projects
+
+1. Navigate to your profile dashboard
+2. Click "Add Project"
+3. Fill in project details:
+   - Title
+   - Description
+   - Project status (draft or published)
+4. Upload images to your project gallery
+5. Save as draft or publish immediately
+
+```typescript
+model Project {
+  id          String        @id @default(cuid())
+  title       String
+  description String        @db.Text
+  status      ProjectStatus @default(draft)
+  gallery     Attachement[]
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+}
+```
+
+### Managing project visibility
+
+Control which projects appear on your profile:
+- **Draft**: Visible only to you
+- **Published**: Visible to all visitors
+
+## Profile ratings and reviews
+
+Your reputation on Khedma Market is built through client reviews:
+
+- Clients can leave reviews after completing orders
+- Reviews include a 1-5 star rating and written feedback
+- Your overall rating is calculated as the average of all reviews
+- The number of reviews is displayed on your profile
+
+```typescript
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1-5 stars
+  comment   String
+  userId    String   // Reviewer
+  gigId     String   // Related gig
+  createdAt DateTime @default(now())
+}
+```
+
+<Info>
+  Your rating appears prominently on your profile and gig listings, influencing client decisions.
+</Info>
+
+## User roles
+
+Khedma Market supports different user roles with varying capabilities:
+
+```typescript
+enum role {
+  client      // Can purchase services
+  freelancer  // Can offer services
+  company     // Can post jobs
+  admin       // Platform administrator
+}
+```
+
+You can act as both a client and freelancer by having the appropriate role assigned to your account.
+
+## Profile optimization tips
+
+Maximize your profile's effectiveness:
+
+<CardGroup cols={2}>
+  <Card title="Complete all sections" icon="circle-check">
+    Profiles with complete information receive more views
+  </Card>
+  <Card title="Use a professional photo" icon="camera">
+    Add a clear, professional profile picture
+  </Card>
+  <Card title="Showcase your best work" icon="star">
+    Add 3-5 high-quality portfolio projects
+  </Card>
+  <Card title="Keep skills current" icon="rotate">
+    Regularly update your skills and experience
+  </Card>
+</CardGroup>
+
+## Profile visibility
+
+Your profile is visible to:
+- All Khedma Market users
+- Search engines (for SEO)
+- Anyone with your profile link
+
+You can control visibility of specific elements like:
+- Email address (shown only after client contact)
+- Phone number (optional to display)
+- Resume (uploaded for job applications)
+
+<Note>
+  A complete, professional profile increases your chances of receiving client inquiries and winning projects.
+</Note>

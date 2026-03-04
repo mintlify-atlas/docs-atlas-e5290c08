@@ -1,0 +1,344 @@
+---
+title: Job marketplace
+description: Post job openings and apply for positions on Khedma Market's job board
+---
+
+The job marketplace connects companies looking to hire with talented freelancers and professionals seeking employment opportunities.
+
+## Two-sided marketplace
+
+Khedma Market's job board serves both employers and job seekers:
+
+<CardGroup cols={2}>
+  <Card title="For companies" icon="building">
+    Post job openings, review applications, and hire talent
+  </Card>
+  <Card title="For job seekers" icon="user-tie">
+    Browse opportunities, apply with your profile, and get hired
+  </Card>
+</CardGroup>
+
+## For companies
+
+### Setting up a company profile
+
+Before posting jobs, create your company profile:
+
+```typescript
+model Company {
+  id           String   @id @default(cuid())
+  name         String
+  logo         String   @db.Text
+  industry     String
+  location     String
+  description  String   @db.Text
+  contactEmail String
+  website      String?
+  userId       String   // Company owner
+  user         User     @relation(fields: [userId], references: [id])
+  jobs         Job[]
+}
+```
+
+Include:
+- Company name and logo
+- Industry and location
+- Detailed company description
+- Contact information
+- Website URL (optional)
+
+<Note>
+  You must have a company profile set up before you can post job listings.
+</Note>
+
+### Creating job posts
+
+Post job opportunities to attract qualified candidates:
+
+**Job details**
+
+```typescript
+model Job {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description Json     // Rich text description
+  location    String
+  salary      String?
+  canBeRemote Boolean
+  type        JobType
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  applications Application[]
+}
+```
+
+**Job types**
+
+Select the employment type:
+
+```typescript
+enum JobType {
+  full_time
+  part_time
+  contract
+  intern
+}
+```
+
+**Creating a job listing**
+
+1. Navigate to your company dashboard
+2. Click "Post a Job"
+3. Fill in the job details:
+   - **Title**: Clear job title (e.g., "Senior Frontend Developer")
+   - **Type**: Select employment type
+   - **Location**: Office location
+   - **Remote**: Toggle if position can be remote
+   - **Salary**: Optional salary range
+   - **Description**: Full job description with requirements and responsibilities
+
+4. Review and publish
+
+```typescript
+const createJob = async (input: JobInput) => {
+  const job = await db.job.create({
+    data: {
+      title: input.title,
+      type: input.jobType,
+      description: input.description,
+      location: input.location,
+      companyId: company.id,
+      canBeRemote: input.canBeRemote,
+      salary: input.salary,
+      slug: slugify(input.title) + '-' + nanoid(4)
+    }
+  });
+};
+```
+
+### Managing applications
+
+Review and manage applications for your job posts:
+
+**Application details**
+
+```typescript
+model Application {
+  id          String   @id @default(cuid())
+  jobId       String
+  userId      String
+  coverLetter String   @db.Text
+  createdAt   DateTime @default(now())
+  job         Job      @relation(fields: [jobId], references: [id])
+  applicant   User     @relation(fields: [userId], references: [id])
+}
+```
+
+For each application, view:
+- Applicant's full profile
+- Resume and cover letter
+- Skills and experience
+- Education and certifications
+- Portfolio projects
+- Contact information
+
+**Review workflow**
+
+1. Access your job dashboard
+2. View list of your job posts
+3. See application count per job
+4. Click into a job to view all applications
+5. Review applicant profiles
+6. Contact candidates directly
+
+<Info>
+  Applications are sorted by submission date, with newest applications appearing first.
+</Info>
+
+### Updating job posts
+
+Edit existing job listings:
+
+```typescript
+const updateJob = async (jobId: string, updates: JobInput) => {
+  return await db.job.update({
+    where: { id: jobId },
+    data: {
+      title: updates.title,
+      type: updates.jobType,
+      description: updates.description,
+      location: updates.location,
+      canBeRemote: updates.canBeRemote,
+      salary: updates.salary
+    }
+  });
+};
+```
+
+You can modify:
+- Job title and description
+- Employment type
+- Location and remote status
+- Salary information
+
+## For job seekers
+
+### Browsing jobs
+
+Discover opportunities on the job board:
+
+**Search and filters**
+- Search by keyword, job title, or company
+- Filter by job type (full-time, part-time, etc.)
+- Filter by location
+- Filter by remote options
+- Sort by date posted
+
+**Job listings display**
+
+Each listing shows:
+- Job title
+- Company name and logo
+- Location and remote status
+- Job type
+- Salary (if provided)
+- Post date
+
+### Viewing job details
+
+Click into a job to see full details:
+
+- Complete job description
+- Required qualifications
+- Responsibilities
+- Company information
+- Application instructions
+
+### Applying for jobs
+
+Submit applications directly through the platform:
+
+**Application requirements**
+
+Your profile must include:
+- Personal information (name, contact details)
+- Resume uploaded
+- Relevant experience or portfolio
+
+**Application process**
+
+1. Click "Apply" on a job listing
+2. Review your profile information
+3. Write a custom cover letter:
+   - Explain why you're interested
+   - Highlight relevant experience
+   - Address job requirements
+4. Submit application
+
+```typescript
+const applyToJob = async (jobSlug: string, coverLetter: string, userId: string) => {
+  const job = await db.job.findFirst({
+    where: { slug: jobSlug }
+  });
+  
+  return await db.application.create({
+    data: {
+      jobId: job.id,
+      userId: userId,
+      coverLetter: coverLetter
+    }
+  });
+};
+```
+
+<Note>
+  Take time to write a personalized cover letter for each application. Generic applications are less likely to get responses.
+</Note>
+
+### Tracking applications
+
+Monitor your application status:
+
+- View all jobs you've applied to
+- See application submission dates
+- Track which applications received responses
+- Access your submitted cover letters
+
+## Profile information used in applications
+
+When you apply, companies see your complete profile:
+
+```typescript
+// Applicant data visible to companies
+{
+  id: string,
+  firstName: string,
+  lastName: string,
+  bio: string,
+  dob: DateTime,
+  address: string,
+  city: string,
+  country: string,
+  profilePic: string,
+  resume: string,
+  phone: string,
+  email: string,
+  username: string,
+  createdAt: DateTime
+}
+```
+
+<Info>
+  Keep your profile updated with current information to make the best impression on employers.
+</Info>
+
+## Job board best practices
+
+### For companies
+
+<CardGroup cols={2}>
+  <Card title="Write clear descriptions" icon="file-lines">
+    Include specific requirements and responsibilities
+  </Card>
+  <Card title="Include salary ranges" icon="dollar-sign">
+    Transparency attracts more qualified applicants
+  </Card>
+  <Card title="Respond promptly" icon="clock">
+    Reply to applications within 3-5 days
+  </Card>
+  <Card title="Keep posts updated" icon="rotate">
+    Close or update job posts when positions are filled
+  </Card>
+</CardGroup>
+
+### For job seekers
+
+<CardGroup cols={2}>
+  <Card title="Complete your profile" icon="user-check">
+    Upload your resume and add portfolio projects
+  </Card>
+  <Card title="Customize applications" icon="pen-to-square">
+    Write unique cover letters for each position
+  </Card>
+  <Card title="Apply promptly" icon="clock">
+    Apply soon after jobs are posted
+  </Card>
+  <Card title="Follow up professionally" icon="envelope">
+    Send a polite follow-up if you don't hear back
+  </Card>
+</CardGroup>
+
+## Job URLs and sharing
+
+Each job has a unique URL based on its slug:
+
+```
+khedma-market.com/jobs/senior-frontend-developer-a8x2
+```
+
+Companies can share job links:
+- On social media
+- In email campaigns
+- On company websites
+- In recruitment communications

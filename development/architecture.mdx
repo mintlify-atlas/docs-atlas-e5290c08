@@ -1,0 +1,345 @@
+---
+title: Architecture overview
+description: Understanding the Khedma Market technical architecture and tech stack
+---
+
+Khedma Market is built with modern web technologies focusing on type safety, developer experience, and performance.
+
+## Tech stack
+
+The application uses the T3 Stack as its foundation, combining:
+
+<CodeGroup>
+```json Frontend
+"next": "^14.0.4"
+"react": "18.2.0"
+"typescript": "^5.1.6"
+"tailwindcss": "^3.4.1"
+```
+
+```json Backend
+"@trpc/server": "^10.43.6"
+"@prisma/client": "^5.10.1"
+"next-auth": "^4.24.5"
+```
+
+```json Database
+"prisma": "^5.10.1"
+"mysql": (via DATABASE_URL)
+```
+</CodeGroup>
+
+### Core technologies
+
+- **Next.js 14**: React framework with App Router for server-side rendering and routing
+- **TypeScript**: Type-safe development across the entire stack
+- **tRPC**: End-to-end typesafe APIs without code generation
+- **Prisma**: Type-safe database ORM and migrations
+- **NextAuth.js**: Complete authentication solution
+- **Tailwind CSS**: Utility-first CSS framework
+- **Radix UI**: Accessible, unstyled UI components
+
+## Application structure
+
+The project follows Next.js App Router conventions:
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── (public)/          # Public pages (marketing)
+│   ├── (dashboard)/       # Protected dashboard pages
+│   ├── auth/              # Authentication pages
+│   ├── api/               # API routes
+│   │   └── trpc/          # tRPC endpoint
+│   └── layout.tsx         # Root layout
+├── server/                # Server-side code
+│   ├── api/               # tRPC API
+│   │   ├── routers/       # API route handlers
+│   │   ├── trpc.ts        # tRPC initialization
+│   │   └── root.ts        # Router composition
+│   ├── auth.ts            # NextAuth configuration
+│   └── db.ts              # Prisma client instance
+├── actions/               # Server actions
+├── components/            # React components
+├── lib/                   # Utility functions
+├── schemas/               # Zod validation schemas
+├── styles/                # Global styles
+└── trpc/                  # tRPC client config
+    ├── react.tsx          # React Query provider
+    ├── server.ts          # Server-side client
+    └── shared.ts          # Shared utilities
+```
+
+## tRPC API layer
+
+Khedma Market uses tRPC for type-safe API communication between client and server.
+
+### Router structure
+
+The API is organized into domain-specific routers:
+
+```typescript src/server/api/root.ts
+export const appRouter = createTRPCRouter({
+  user: userRouter,
+  file: fileRouter,
+  order: orderRouter,
+  profile: profileRouter,
+  category: CategoryRouter,
+  gig: gigRouter,
+  project: projectRouter,
+  conversation: conversationRouter,
+  job: jobRouter,
+});
+
+export type AppRouter = typeof appRouter;
+```
+
+### Context and procedures
+
+Every tRPC procedure has access to context containing the database and session:
+
+```typescript src/server/api/trpc.ts
+export const createTRPCContext = async (opts: { headers: Headers }) => {
+  const session = await getServerAuthSession();
+
+  return {
+    db,
+    session,
+    ...opts,
+  };
+};
+```
+
+<Accordion title="Public procedures">
+  Available to all users, authenticated or not:
+
+  ```typescript
+  export const publicProcedure = t.procedure;
+  ```
+
+  Used for:
+  - Fetching public gigs
+  - Viewing freelancer profiles
+  - Browsing categories
+</Accordion>
+
+<Accordion title="Protected procedures">
+  Require authentication and throw `UNAUTHORIZED` error if session is invalid:
+
+  ```typescript
+  export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+    if (!ctx.session || !ctx.session.user) {
+      throw new TRPCError({ code: "UNAUTHORIZED" });
+    }
+
+    return next({
+      ctx: {
+        session: { ...ctx.session, user: ctx.session.user },
+      },
+    });
+  });
+  ```
+
+  Used for:
+  - Creating and editing gigs
+  - Sending messages
+  - Managing orders
+  - Updating profile
+</Accordion>
+
+### Client-side usage
+
+Components use the tRPC React Query hooks:
+
+```tsx
+'use client';
+
+import { api } from '@/trpc/react';
+
+export function GigList() {
+  const { data: gigs } = api.gig.getAll.useQuery();
+  
+  return (
+    // Render gigs
+  );
+}
+```
+
+### Server-side usage
+
+Server Components and Server Actions call procedures directly:
+
+```tsx
+import { api } from '@/trpc/server';
+
+export async function GigPage({ params }: { params: { slug: string } }) {
+  const gig = await api.gig.getBySlug({ slug: params.slug });
+  
+  return (
+    // Render gig
+  );
+}
+```
+
+## Data flow patterns
+
+### Server Components (default)
+
+Server Components fetch data directly from tRPC:
+
+```tsx
+import { api } from '@/trpc/server';
+
+export default async function Page() {
+  const data = await api.user.getProfile();
+  return <Profile data={data} />;
+}
+```
+
+### Client Components
+
+Client Components use React Query hooks:
+
+```tsx
+'use client';
+
+import { api } from '@/trpc/react';
+
+export function InteractiveComponent() {
+  const utils = api.useUtils();
+  const { mutate } = api.gig.create.useMutation({
+    onSuccess: () => utils.gig.invalidate(),
+  });
+  
+  return <Form onSubmit={(data) => mutate(data)} />;
+}
+```
+
+### Server Actions
+
+Server Actions handle form submissions and mutations:
+
+```typescript
+'use server';
+
+import { db } from '@/server/db';
+
+export async function updateProfile(formData: FormData) {
+  // Validate and process
+  await db.user.update({
+    where: { id: userId },
+    data: { name: formData.get('name') },
+  });
+}
+```
+
+## Styling approach
+
+The application uses a component-based styling approach:
+
+### Tailwind CSS
+
+Utility classes for rapid UI development:
+
+```tsx
+<div className="flex items-center gap-4 rounded-lg border p-4">
+  <Avatar />
+  <div className="flex-1">
+    <h3 className="font-semibold">Title</h3>
+  </div>
+</div>
+```
+
+### UI components
+
+Reusable components built with Radix UI primitives:
+
+```tsx
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+
+export function MyComponent() {
+  return (
+    <Dialog>
+      <DialogContent>
+        <Button variant="primary">Submit</Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+## Real-time features
+
+The application uses Socket.IO for real-time messaging:
+
+```json
+"socket.io-client": "^4.7.5"
+```
+
+Messages are synced in real-time through WebSocket connections, enabling instant inbox updates.
+
+## Form handling
+
+Forms use React Hook Form with Zod validation:
+
+<CodeGroup>
+```typescript Schema Definition
+import { z } from 'zod';
+
+export const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+```
+
+```tsx Form Usage
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+export function LoginForm() {
+  const form = useForm({
+    resolver: zodResolver(LoginSchema),
+  });
+  
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)}>
+      {/* Form fields */}
+    </form>
+  );
+}
+```
+</CodeGroup>
+
+## Performance optimizations
+
+- **Turbopack**: Faster development builds with Next.js Turbopack
+- **Server Components**: Reduce client-side JavaScript
+- **React Query caching**: Automatic request deduplication and caching
+- **SuperJSON**: Efficient serialization with Date and BigInt support
+- **Image optimization**: Next.js automatic image optimization
+
+## Environment configuration
+
+The application uses `@t3-oss/env-nextjs` for type-safe environment variables:
+
+```typescript
+import { createEnv } from '@t3-oss/env-nextjs';
+import { z } from 'zod';
+
+export const env = createEnv({
+  server: {
+    DATABASE_URL: z.string().url(),
+    NEXTAUTH_SECRET: z.string().min(1),
+  },
+  client: {
+    // Public env vars
+  },
+});
+```
+
+## Next steps
+
+- Explore the [database schema](/development/database-schema)
+- Learn about [authentication](/development/authentication)
+- Review the [API reference](/api-reference)

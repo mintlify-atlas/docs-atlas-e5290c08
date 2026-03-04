@@ -1,0 +1,114 @@
+{
+  "projectType": "saas",
+  "projectName": "Khedma Market",
+  "projectDescription": "A freelancing platform for Moroccan people, offering a local alternative to international platforms like Fiverr and Upwork.",
+  "theme": "almond",
+  "primaryColor": "#040404",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "getting-started"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/freelancer-profiles",
+              "features/gigs-and-services",
+              "features/job-marketplace",
+              "features/messaging-system",
+              "features/orders-and-payments"
+            ]
+          },
+          {
+            "group": "User Guides",
+            "pages": [
+              "guides/freelancer-guide",
+              "guides/client-guide",
+              "guides/creating-gigs",
+              "guides/posting-jobs",
+              "guides/managing-orders"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/setup",
+              "development/architecture",
+              "development/database-schema",
+              "development/authentication"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "api/overview",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/users",
+              "api/gigs",
+              "api/jobs",
+              "api/orders",
+              "api/conversations",
+              "api/profiles",
+              "api/projects",
+              "api/categories",
+              "api/files"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Freelancer profile creation and management",
+    "Service listing (Gigs) with packages and pricing",
+    "Job posting and application system",
+    "Real-time messaging and inbox",
+    "Order management and tracking",
+    "Portfolio and project showcase",
+    "Reviews and ratings system",
+    "Local payment in Moroccan Dirhams",
+    "Two-factor authentication",
+    "File upload and management"
+  ],
+  "publicApiSurface": [
+    "user.getProfile",
+    "user.updateProfile",
+    "gig.create",
+    "gig.update",
+    "gig.getAll",
+    "gig.getById",
+    "job.create",
+    "job.getAll",
+    "job.apply",
+    "order.create",
+    "order.getAll",
+    "order.updateStatus",
+    "conversation.create",
+    "conversation.sendMessage",
+    "conversation.getAll",
+    "profile.update",
+    "project.create",
+    "project.update",
+    "category.getAll",
+    "file.upload"
+  ]
+}
